@@ -21,6 +21,14 @@ export default function Home() {
       color: 'blue',
     },
     {
+      id: 'audio',
+      title: 'Audio Tools',
+      description: 'Compress, trim, format and enhance your audio files.',
+      icon: <Icons.Music />,
+      path: '/audio',
+      color: 'purple',
+    },
+    {
       id: 'pdf',
       title: 'PDF Tools',
       description: 'Compress PDFs, and delete or rearrange specific pages.',

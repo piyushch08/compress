@@ -183,6 +183,65 @@ app.post('/api/process/video', upload.single('file'), (req, res) => {
 });
 
 // ========================
+// AUDIO PROCESSING
+// ========================
+app.post('/api/process/audio', upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  const { format, audioBitrate, startTime, duration, enhance } = req.body;
+  const inputPath = req.file.path;
+  const outFormat = format || 'mp3';
+  const outputPath = path.join(__dirname, 'output', `${req.file.filename}.${outFormat}`);
+
+  let command = ffmpeg(inputPath);
+
+  if (startTime) command = command.setStartTime(startTime);
+  if (duration) command = command.setDuration(duration);
+
+  // Audio Bitrate
+  if (audioBitrate) {
+    command = command.audioBitrate(audioBitrate);
+  }
+
+  // Audio Enhancement
+  if (enhance === 'true') {
+    command = command.audioFilters('acompressor=ratio=4,loudnorm');
+  }
+
+  // Ensure no video stream is included (in case a video was uploaded for audio extraction)
+  command = command.noVideo();
+
+  const originalName = req.file.originalname;
+  const baseName = originalName.substring(0, originalName.lastIndexOf('.')) || originalName;
+  const downloadName = `${baseName}_optimized.${outFormat}`;
+
+  command
+    .format(outFormat)
+    .on('start', (cmdline) => {
+      console.log('FFmpeg Audio started:', cmdline);
+    })
+    .on('progress', (progress) => {
+      if (progress.percent) {
+        console.log(`Audio Processing: ${Math.round(progress.percent)}% done`);
+      }
+    })
+    .on('end', () => {
+      console.log('Audio processing finished');
+      res.download(outputPath, downloadName, () => {
+        cleanup(inputPath, outputPath);
+      });
+    })
+    .on('error', (err) => {
+      console.error('Audio processing error:', err);
+      cleanup(inputPath, outputPath);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to process audio: ' + err.message });
+      }
+    })
+    .save(outputPath);
+});
+
+// ========================
 // DOCUMENT PROCESSING (PDF)
 // ========================
 app.post('/api/process/document', upload.single('file'), async (req, res) => {

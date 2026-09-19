@@ -66,7 +66,7 @@ body::before {
 #root {
   position: relative;
   z-index: 1;
-  max-width: 880px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 2rem 1.5rem;
   min-height: 100vh;
@@ -84,12 +84,8 @@ body::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 68px;
-  height: 68px;
-  border-radius: var(--radius-xl);
-  background: var(--white);
   margin-bottom: 1.25rem;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 0 0 4px var(--white-15);
+  background: transparent;
   animation: float 5s ease-in-out infinite;
 }
 
@@ -332,9 +328,7 @@ body::before {
   margin-bottom: 1.75rem;
 }
 
-@media (max-width: 600px) {
-  .options-grid { grid-template-columns: 1fr; }
-}
+
 
 .option-group {
   display: flex;
@@ -933,12 +927,23 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 
 /* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+  #root { padding: 1.5rem 1rem; }
+  .app-title { font-size: 2.25rem; }
+  .main-card { padding: 1.75rem; }
+  .dropzone { padding: 3rem 1.5rem; }
+  .options-grid { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 480px) {
-  .app-title { font-size: 2rem; }
-  .main-card { padding: 1.5rem; border-radius: var(--radius-xl); }
-  .dropzone { padding: 2.5rem 1rem; }
+  #root { padding: 1rem 0.75rem; }
+  .app-title { font-size: 1.8rem; }
+  .app-subtitle { font-size: 0.95rem; }
+  .main-card { padding: 1.25rem; border-radius: var(--radius-xl); }
+  .dropzone { padding: 2rem 1rem; }
   .modal-panel { padding: 1.5rem; }
   .footer-socials { gap: 0.5rem; }
+  .btn-process { padding: 0.9rem 1.5rem; font-size: 0.95rem; }
 }
 
 /* ===== HOME DASHBOARD & ROUTING ===== */

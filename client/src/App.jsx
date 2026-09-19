@@ -7,6 +7,7 @@ import { Icons } from './utils/Icons';
 import Home from './pages/Home';
 import ImageTools from './pages/ImageTools';
 import VideoTools from './pages/VideoTools';
+import AudioTools from './pages/AudioTools';
 import PdfTools from './pages/PdfTools';
 import MergeTools from './pages/MergeTools';
 
@@ -23,8 +24,8 @@ function App() {
     <>
       <Toaster position="bottom-center" toastOptions={{ style: { borderRadius: '14px', background: '#ffffff', color: '#0f172a', fontWeight: '600' } }} />
       <header className="app-header">
-        <div className="app-logo" style={{ background: 'transparent' }}>
-          <img src="/favicon.svg" alt="SHIZEN Logo" style={{ width: '32px', height: '32px' }} />
+        <div className="app-logo">
+          <img src="/favicon.svg" alt="SHIZEN Logo" style={{ width: '64px', height: '64px' }} />
         </div>
         <h1 className="app-title">SHIZEN - Compress & Convert</h1>
         <p className="app-subtitle">Premium file compression, conversion, and editing</p>
@@ -35,6 +36,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/image" element={<ImageTools />} />
           <Route path="/video" element={<VideoTools />} />
+          <Route path="/audio" element={<AudioTools />} />
           <Route path="/pdf" element={<PdfTools />} />
           <Route path="/merge" element={<MergeTools />} />
         </Routes>
