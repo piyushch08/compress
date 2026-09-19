@@ -59,10 +59,20 @@ export const Icons = {
       <line x1="12" y1="16" x2="12.01" y2="16"/>
     </svg>
   ),
-  Sunflower: () => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6.1 15.3a2 2 0 1 1-3.6-2.5l.8-.8A6.8 6.8 0 0 1 4 9a2 2 0 1 1 2.5-3.6l.8.8A6.8 6.8 0 0 1 15 4a2 2 0 1 1 3.6 2.5l-.8.8A6.8 6.8 0 0 1 20 15a2 2 0 1 1-2.5 3.6l-.8-.8A6.8 6.8 0 0 1 9 20a2 2 0 1 1-3.6-2.5l.8-.8A6.8 6.8 0 0 1 6.1 15.3Z"/>
-      <circle cx="12" cy="12" r="3"/>
+  Sunflower: (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" {...props}>
+      <g fill="#FBBF24">
+        <circle cx="50" cy="15" r="10" />
+        <circle cx="75" cy="25" r="10" />
+        <circle cx="85" cy="50" r="10" />
+        <circle cx="75" cy="75" r="10" />
+        <circle cx="50" cy="85" r="10" />
+        <circle cx="25" cy="75" r="10" />
+        <circle cx="15" cy="50" r="10" />
+        <circle cx="25" cy="25" r="10" />
+      </g>
+      <circle cx="50" cy="50" r="22" fill="#78350F" />
+      <circle cx="50" cy="50" r="10" fill="#451A03" />
     </svg>
   ),
   LinkedIn: () => (

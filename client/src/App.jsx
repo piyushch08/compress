@@ -20,9 +20,9 @@ function App() {
     <>
       <header className="app-header">
         <div className="app-logo" style={{ color: '#eab308', background: '#fef08a' }}>
-          <Icons.Sunflower />
+          <Icons.Sunflower style={{ width: '28px', height: '28px' }} />
         </div>
-        <h1 className="app-title">SHIZEN</h1>
+        <h1 className="app-title">SHIZEN - Compress & Convert</h1>
         <p className="app-subtitle">Premium file compression, conversion, and editing</p>
       </header>
 
