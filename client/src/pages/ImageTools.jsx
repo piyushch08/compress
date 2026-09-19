@@ -218,7 +218,6 @@ export default function ImageTools() {
       </Link>
       
       <div style={{textAlign: 'center', marginBottom: '2rem'}}>
-        <div className="dropzone-icon" style={{margin: '0 auto 1rem'}}><Icons.Image /></div>
         <h2 style={{color: 'var(--blue-900)', fontSize: '1.5rem', fontWeight: 900}}>Image Compressor & Resizer</h2>
         <p style={{color: 'var(--dark-muted)'}}>Upload an image to visually crop, resize, or change its format.</p>
       </div>
@@ -271,7 +270,7 @@ export default function ImageTools() {
           ) : (
             <div className="options-panel">
               
-              <div className="section-label"><Icons.Scissors /> Visual Cropping</div>
+              <div className="section-label">Visual Cropping</div>
               <div className="visual-editor-container" style={{background: '#f8fafc', padding: '1rem', borderRadius: 'var(--radius-lg)', marginBottom: '1.5rem', display: 'flex', justifyContent: 'center', overflow: 'hidden'}}>
                 {previewUrl && (
                   <ReactCrop 

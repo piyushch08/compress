@@ -131,7 +131,6 @@ export default function MergeTools() {
       </Link>
       
       <div style={{textAlign: 'center', marginBottom: '2rem'}}>
-        <div className="dropzone-icon" style={{margin: '0 auto 1rem', background: '#8b5cf6'}}><Icons.Layers /></div>
         <h2 style={{color: 'var(--blue-900)', fontSize: '1.5rem', fontWeight: 900}}>Merge Images & PDFs</h2>
         <p style={{color: 'var(--dark-muted)'}}>Combine multiple images or PDFs into a single PDF document.</p>
       </div>

@@ -188,7 +188,6 @@ export default function AudioTools() {
       </Link>
       
       <div style={{textAlign: 'center', marginBottom: '2rem'}}>
-        <div className="dropzone-icon" style={{margin: '0 auto 1rem', background: '#8b5cf6'}}><Icons.Music /></div>
         <h2 style={{color: 'var(--blue-900)', fontSize: '1.5rem', fontWeight: 900}}>Audio Compressor & Editor</h2>
         <p style={{color: 'var(--dark-muted)'}}>Upload an audio file to compress, format, trim, and enhance.</p>
       </div>
@@ -240,7 +239,7 @@ export default function AudioTools() {
           ) : (
             <div className="options-panel">
               
-              <div className="section-label"><Icons.Music /> Audio Preview & Review</div>
+              <div className="section-label">Audio Preview & Review</div>
               <div className="visual-editor-container" style={{background: '#f8fafc', padding: '1rem', borderRadius: 'var(--radius-lg)', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
                 {previewUrl && (
                   <>
@@ -257,7 +256,7 @@ export default function AudioTools() {
                 )}
               </div>
 
-              <div className="section-label"><Icons.Scissors /> Trim Audio</div>
+              <div className="section-label">Trim Audio</div>
               <div className="options-grid">
                 <div className="option-group">
                   <label>Start Time (e.g. 00:00:10 or 10)</label>

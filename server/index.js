@@ -244,53 +244,88 @@ app.post('/api/process/audio', upload.single('file'), (req, res) => {
 // ========================
 // DOCUMENT PROCESSING (PDF)
 // ========================
-app.post('/api/process/document', upload.single('file'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+app.post('/api/process/document', upload.array('files', 20), async (req, res) => {
+  if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
 
-  const inputPath = req.file.path;
-  const outputPath = path.join(__dirname, 'output', `${req.file.filename}.pdf`);
+  const inputPaths = req.files.map(f => f.path);
+  const outputPath = path.join(__dirname, 'output', `optimized_${Date.now()}.pdf`);
 
   try {
-    const pdfBytes = fs.readFileSync(inputPath);
-    const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
-
-    const { pagesToDelete } = req.body;
-    
-    // Process page deletions if provided (comma separated, 1-indexed)
-    if (pagesToDelete) {
-      const pagesArr = pagesToDelete.split(',').map(s => s.trim());
-      const pagesToDel = pagesArr.map(s => parseInt(s, 10) - 1).filter(n => !isNaN(n)).sort((a,b) => b - a);
-      for (const p of pagesToDel) {
-        if (p >= 0 && p < pdfDoc.getPageCount()) {
-          pdfDoc.removePage(p);
-        }
+    // 1. Create a virtual merged document from all uploaded PDFs
+    const tempDoc = await PDFDocument.create();
+    for (const file of req.files) {
+      if (file.mimetype === 'application/pdf') {
+        const fileBytes = fs.readFileSync(file.path);
+        const pdf = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
+        const copiedPages = await tempDoc.copyPages(pdf, pdf.getPageIndices());
+        copiedPages.forEach((page) => tempDoc.addPage(page));
       }
     }
 
-    // Optimize: strip all metadata
-    pdfDoc.setTitle('');
-    pdfDoc.setAuthor('');
-    pdfDoc.setSubject('');
-    pdfDoc.setKeywords([]);
-    pdfDoc.setProducer('');
-    pdfDoc.setCreator('');
+    const { pageOrder } = req.body;
+    let finalDoc;
 
-    const savedBytes = await pdfDoc.save({
+    // 2. If pageOrder is provided, pick pages in exact sequence
+    if (pageOrder) {
+      finalDoc = await PDFDocument.create();
+      const seqStr = pageOrder.split(',').map(s => s.trim()).filter(s => s);
+      const indicesToCopy = [];
+      
+      for (const s of seqStr) {
+        if (s.includes('-')) {
+          const [startStr, endStr] = s.split('-');
+          const start = parseInt(startStr, 10) - 1;
+          const end = parseInt(endStr, 10) - 1;
+          if (!isNaN(start) && !isNaN(end)) {
+             const step = start <= end ? 1 : -1;
+             for (let i = start; step === 1 ? i <= end : i >= end; i += step) {
+                if (i >= 0 && i < tempDoc.getPageCount()) {
+                  indicesToCopy.push(i);
+                }
+             }
+          }
+        } else {
+          const p = parseInt(s, 10) - 1;
+          if (!isNaN(p) && p >= 0 && p < tempDoc.getPageCount()) {
+            indicesToCopy.push(p);
+          }
+        }
+      }
+
+      if (indicesToCopy.length > 0) {
+        const copiedPages = await finalDoc.copyPages(tempDoc, indicesToCopy);
+        copiedPages.forEach((page) => finalDoc.addPage(page));
+      } else {
+         finalDoc = tempDoc; // Fallback if invalid
+      }
+    } else {
+      finalDoc = tempDoc; // No specific order, keep all
+    }
+
+    // 3. Optimize: strip all metadata
+    finalDoc.setTitle('');
+    finalDoc.setAuthor('');
+    finalDoc.setSubject('');
+    finalDoc.setKeywords([]);
+    finalDoc.setProducer('');
+    finalDoc.setCreator('');
+
+    const savedBytes = await finalDoc.save({
       useObjectStreams: false,
     });
 
     fs.writeFileSync(outputPath, savedBytes);
 
-    const originalName = req.file.originalname;
+    const originalName = req.files[0].originalname;
     const baseName = originalName.substring(0, originalName.lastIndexOf('.')) || originalName;
     const downloadName = `${baseName}_optimized.pdf`;
 
     res.download(outputPath, downloadName, () => {
-      cleanup(inputPath, outputPath);
+      cleanup(...inputPaths, outputPath);
     });
   } catch (err) {
     console.error('Document processing error:', err);
-    cleanup(inputPath, outputPath);
+    cleanup(...inputPaths, outputPath);
     res.status(500).json({ error: 'Failed to process document: ' + err.message });
   }
 });

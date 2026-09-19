@@ -224,7 +224,6 @@ export default function VideoTools() {
       </Link>
       
       <div style={{textAlign: 'center', marginBottom: '2rem'}}>
-        <div className="dropzone-icon" style={{margin: '0 auto 1rem'}}><Icons.Video /></div>
         <h2 style={{color: 'var(--blue-900)', fontSize: '1.5rem', fontWeight: 900}}>Video Compressor & Trimmer</h2>
         <p style={{color: 'var(--dark-muted)'}}>Upload a video to visually crop, trim duration, and compress.</p>
       </div>
@@ -276,7 +275,7 @@ export default function VideoTools() {
           ) : (
             <div className="options-panel">
               
-              <div className="section-label"><Icons.Video /> Visual Review & Cropping</div>
+              <div className="section-label">Visual Review & Cropping</div>
               <div className="visual-editor-container" style={{background: '#f8fafc', padding: '1rem', borderRadius: 'var(--radius-lg)', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'hidden'}}>
                 {previewUrl && (
                   <>
@@ -302,7 +301,7 @@ export default function VideoTools() {
                 )}
               </div>
 
-              <div className="section-label"><Icons.Scissors /> Trim Video</div>
+              <div className="section-label">Trim Video</div>
               <div className="options-grid">
                 <div className="option-group">
                   <label>Start Time (e.g. 00:00:10 or 10)</label>

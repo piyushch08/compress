@@ -1,9 +1,10 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Icons } from '../utils/Icons';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import confetti from 'canvas-confetti';
+import { PDFDocument } from 'pdf-lib';
 
 const API_BASE = 'http://localhost:3001/api/process';
 
@@ -14,36 +15,60 @@ function formatSize(bytes) {
 }
 
 export default function PdfTools() {
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState('idle');
 
   // PDF specific states
-  const [pagesToDelete, setPagesToDelete] = useState('');
+  const [pageOrder, setPageOrder] = useState('');
+  const [totalPages, setTotalPages] = useState(0);
 
   const fileInputRef = useRef(null);
 
   const resetAll = useCallback(() => {
-    setFile(null);
+    setFiles([]);
     setStatus('idle');
-    setPagesToDelete('');
+    setPageOrder('');
+    setTotalPages(0);
   }, []);
 
-  const handleFile = useCallback((selectedFile) => {
-    if (!selectedFile) return;
-    if (selectedFile.size > 500 * 1024 * 1024) {
-        toast.error('File exceeds 500MB limit.');
-        setStatus('idle');
-        return;
+  const handleFiles = useCallback(async (selectedFiles) => {
+    if (!selectedFiles || selectedFiles.length === 0) return;
+    
+    const validFiles = Array.from(selectedFiles).filter(f => f.type === 'application/pdf');
+    if (validFiles.length !== selectedFiles.length) {
+      toast.error('Only PDF files are allowed.');
     }
-    if (selectedFile.type !== 'application/pdf') {
-        toast.error('Please upload a PDF file.');
-        setStatus('idle');
-        return;
+    
+    const oversized = validFiles.some(f => f.size > 500 * 1024 * 1024);
+    if (oversized) {
+      toast.error('One or more files exceed the 500MB limit.');
+      return;
     }
-    setFile(selectedFile);
+
+    if (validFiles.length === 0) return;
+
+    setFiles(prev => [...prev, ...validFiles]);
     setStatus('idle');
   }, []);
+
+  // Calculate total pages whenever files change
+  useEffect(() => {
+    const calcPages = async () => {
+      let count = 0;
+      for (const file of files) {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+          count += pdfDoc.getPageCount();
+        } catch (e) {
+          console.error("Error reading PDF page count:", e);
+        }
+      }
+      setTotalPages(count);
+    };
+    calcPages();
+  }, [files]);
 
   const onDragOver = useCallback((e) => {
     e.preventDefault();
@@ -58,16 +83,53 @@ export default function PdfTools() {
   const onDrop = useCallback((e) => {
     e.preventDefault();
     setIsDragging(false);
-    handleFile(e.dataTransfer.files[0]);
-  }, [handleFile]);
+    handleFiles(e.dataTransfer.files);
+  }, [handleFiles]);
+
+  const removeFile = (index) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const totalOriginalSize = useMemo(() => files.reduce((acc, f) => acc + f.size, 0), [files]);
+
+  const estimatedSize = useMemo(() => {
+    if (files.length === 0 || totalPages === 0) return 0;
+    
+    let requestedPages = totalPages;
+    
+    if (pageOrder.trim()) {
+      const seqStr = pageOrder.split(',').map(s => s.trim()).filter(s => s);
+      let count = 0;
+      for (const s of seqStr) {
+        if (s.includes('-')) {
+          const [startStr, endStr] = s.split('-');
+          const start = parseInt(startStr, 10);
+          const end = parseInt(endStr, 10);
+          if (!isNaN(start) && !isNaN(end)) {
+            count += Math.abs(end - start) + 1;
+          }
+        } else {
+          const p = parseInt(s, 10);
+          if (!isNaN(p)) {
+            count += 1;
+          }
+        }
+      }
+      requestedPages = count;
+    }
+    
+    // Estimate: (Total Size / Total Pages) * Requested Pages * 0.95 (metadata strip savings)
+    const avgSizePerPage = totalOriginalSize / totalPages;
+    return Math.max(1024, avgSizePerPage * requestedPages * 0.95);
+  }, [files, totalPages, pageOrder, totalOriginalSize]);
 
   const handleProcess = async () => {
-    if (!file) return;
+    if (files.length === 0) return;
     setStatus('processing');
 
     const formData = new FormData();
-    formData.append('file', file);
-    if (pagesToDelete) formData.append('pagesToDelete', pagesToDelete);
+    files.forEach(f => formData.append('files', f));
+    if (pageOrder) formData.append('pageOrder', pageOrder);
 
     try {
       const response = await fetch(`${API_BASE}/document`, {
@@ -86,7 +148,7 @@ export default function PdfTools() {
       a.style.display = 'none';
       a.href = downloadUrl;
       
-      const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+      const baseName = files[0].name.substring(0, files[0].name.lastIndexOf('.')) || files[0].name;
       a.download = `${baseName}_optimized.pdf`;
       
       document.body.appendChild(a);
@@ -117,84 +179,94 @@ export default function PdfTools() {
       </Link>
       
       <div style={{textAlign: 'center', marginBottom: '2rem'}}>
-        <div className="dropzone-icon" style={{margin: '0 auto 1rem', background: '#059669'}}><Icons.Document /></div>
         <h2 style={{color: 'var(--blue-900)', fontSize: '1.5rem', fontWeight: 900}}>PDF Compressor & Editor</h2>
-        <p style={{color: 'var(--dark-muted)'}}>Compress PDFs and delete specific pages.</p>
+        <p style={{color: 'var(--dark-muted)'}}>Upload PDFs to merge, rearrange, remove pages, and compress.</p>
       </div>
 
-      {!file && (
-        <div
-          className={`dropzone ${isDragging ? 'active' : ''}`}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onDrop={onDrop}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={(e) => handleFile(e.target.files[0])}
-            style={{ display: 'none' }}
-            accept="application/pdf"
-          />
-          <div className="dropzone-icon" style={{background: '#059669'}}><Icons.Upload /></div>
-          <h2>Upload PDF</h2>
-          <p>Drag and drop your PDF file here, or click to browse</p>
-          <div className="supported">
-            <span className="badge">Max 500MB</span>
-            <span className="badge green">PDF</span>
-          </div>
+      <div
+        className={`dropzone ${isDragging ? 'active' : ''}`}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        onClick={() => fileInputRef.current?.click()}
+        style={{ marginBottom: files.length > 0 ? '1.5rem' : '0' }}
+      >
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={(e) => handleFiles(e.target.files)}
+          style={{ display: 'none' }}
+          accept="application/pdf"
+          multiple
+        />
+        <div className="dropzone-icon" style={{background: '#059669'}}><Icons.Upload /></div>
+        <h2>{files.length > 0 ? 'Add more PDFs' : 'Upload PDF'}</h2>
+        <p>Drag and drop PDF files here, or click to browse</p>
+        <div className="supported">
+          <span className="badge">Max 500MB</span>
+          <span className="badge green">PDF</span>
         </div>
-      )}
+      </div>
 
-      {file && status !== 'success' && (
+      {files.length > 0 && status !== 'success' && (
         <div className="file-config-section">
-          <div className="file-bar">
-            <div className="file-bar-icon document"><Icons.Document /></div>
-            <div className="file-bar-info">
-              <div className="file-bar-name">{file.name}</div>
-              <div className="file-bar-meta">{formatSize(file.size)}</div>
+          
+          <div className="section-label">Selected Files</div>
+          {files.map((f, idx) => (
+            <div className="file-bar" key={idx} style={{ marginBottom: '0.5rem', padding: '0.75rem 1rem' }}>
+              <div className="file-bar-icon document" style={{ width: '36px', height: '36px' }}><Icons.Document /></div>
+              <div className="file-bar-info">
+                <div className="file-bar-name">{f.name}</div>
+                <div className="file-bar-meta">{formatSize(f.size)}</div>
+              </div>
+              <button className="file-bar-remove" onClick={() => removeFile(idx)} title="Remove file">
+                <Icons.Trash2 />
+              </button>
             </div>
-            <button className="file-bar-remove" onClick={resetAll} title="Remove file">
-              <Icons.Trash2 />
-            </button>
-          </div>
+          ))}
 
           {status === 'processing' ? (
-            <div className="processing-state">
+            <div className="processing-state" style={{ marginTop: '2rem' }}>
               <div className="spinner-ring" style={{borderTopColor: '#059669'}}></div>
               <div className="processing-label">Processing PDF...</div>
               <p>Please wait while we optimize your document.</p>
             </div>
           ) : (
-            <div className="options-panel">
+            <div className="options-panel" style={{ marginTop: '1.5rem' }}>
               
-              <div className="section-label">Page Management</div>
+              <div className="section-label">Page Sequence (Rearrange & Remove)</div>
               <div className="options-grid">
                 <div className="option-group full-width">
-                  <label>Delete Pages (Comma separated, 1-indexed)</label>
+                  <label>Page Order (Total Pages: {totalPages > 0 ? totalPages : 'Loading...'})</label>
                   <input
                     type="text"
                     className="input"
-                    placeholder="e.g. 1, 3, 5-7"
-                    value={pagesToDelete}
-                    onChange={(e) => setPagesToDelete(e.target.value)}
+                    placeholder={`e.g. 1, 4-5, 2`}
+                    value={pageOrder}
+                    onChange={(e) => setPageOrder(e.target.value)}
                   />
-                  <small style={{color: 'var(--dark-muted)', marginTop: '0.25rem'}}>Leave empty to keep all pages. (Ranges like 5-7 are supported backend, but for now just use commas e.g. 1,3,5)</small>
+                  <small style={{color: 'var(--dark-muted)', marginTop: '0.35rem', display: 'block', lineHeight: '1.5'}}>
+                    <strong>Tip:</strong> Leave empty to keep all {totalPages} pages in order. <br/>
+                    Type <code>1, 3, 2</code> to rearrange. Type <code>1-5</code> for a range. Type <code>5-1</code> to reverse! 
+                  </small>
                 </div>
               </div>
 
-              <div className="section-label">Optimization</div>
+              <div className="section-label">Optimization & Output</div>
               <div className="options-grid">
                 <div className="option-group full-width">
                   <p style={{ color: 'var(--dark-muted)', fontSize: '0.9rem', lineHeight: '1.6', fontWeight: '500' }}>
-                    We'll automatically strip metadata (author, title, keywords) and optimize the PDF structure to reduce file size.
+                    We automatically strip unnecessary metadata to reduce file size.
                   </p>
                 </div>
               </div>
 
+              <div className="estimation-badge" style={{textAlign: 'center', marginBottom: '1.5rem', background: 'var(--blue-50)', padding: '0.75rem', borderRadius: 'var(--radius-md)', color: '#059669', fontWeight: 700}}>
+                Estimated Compressed Size: ~{formatSize(estimatedSize)}
+              </div>
+
               <button className="btn-process" onClick={handleProcess} style={{background: '#059669'}}>
-                Process PDF
+                Process & Download PDF
               </button>
             </div>
           )}
