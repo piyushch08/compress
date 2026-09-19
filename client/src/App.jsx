@@ -19,8 +19,8 @@ function App() {
   return (
     <>
       <header className="app-header">
-        <div className="app-logo" style={{ color: '#eab308', background: '#fef08a' }}>
-          <Icons.Sunflower style={{ width: '28px', height: '28px' }} />
+        <div className="app-logo" style={{ background: 'transparent' }}>
+          <img src="/favicon.svg" alt="SHIZEN Logo" style={{ width: '32px', height: '32px' }} />
         </div>
         <h1 className="app-title">SHIZEN - Compress & Convert</h1>
         <p className="app-subtitle">Premium file compression, conversion, and editing</p>
