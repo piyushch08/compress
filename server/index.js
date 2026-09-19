@@ -17,7 +17,7 @@ app.use(express.json());
 
 const upload = multer({
   dest: 'uploads/',
-  limits: { fileSize: 2 * 1024 * 1024 * 1024 } // 2 GB
+  limits: { fileSize: 500 * 1024 * 1024 } // 500 MB
 });
 
 // Ensure directories exist
@@ -103,12 +103,15 @@ app.post('/api/process/image', upload.single('file'), async (req, res) => {
 app.post('/api/process/video', upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-  const { width, height, format, videoBitrate } = req.body;
+  const { width, height, format, videoBitrate, startTime, duration } = req.body;
   const inputPath = req.file.path;
   const outFormat = format || 'mp4';
   const outputPath = path.join(__dirname, 'output', `${req.file.filename}.${outFormat}`);
 
   let command = ffmpeg(inputPath);
+
+  if (startTime) command = command.setStartTime(startTime);
+  if (duration) command = command.setDuration(duration);
 
   // Build video filters for resize (ffmpeg needs even numbers)
   const videoFilters = [];
@@ -174,6 +177,19 @@ app.post('/api/process/document', upload.single('file'), async (req, res) => {
     const pdfBytes = fs.readFileSync(inputPath);
     const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
 
+    const { pagesToDelete } = req.body;
+    
+    // Process page deletions if provided (comma separated, 1-indexed)
+    if (pagesToDelete) {
+      const pagesArr = pagesToDelete.split(',').map(s => s.trim());
+      const pagesToDel = pagesArr.map(s => parseInt(s, 10) - 1).filter(n => !isNaN(n)).sort((a,b) => b - a);
+      for (const p of pagesToDel) {
+        if (p >= 0 && p < pdfDoc.getPageCount()) {
+          pdfDoc.removePage(p);
+        }
+      }
+    }
+
     // Optimize: strip all metadata
     pdfDoc.setTitle('');
     pdfDoc.setAuthor('');
@@ -199,6 +215,62 @@ app.post('/api/process/document', upload.single('file'), async (req, res) => {
     console.error('Document processing error:', err);
     cleanup(inputPath, outputPath);
     res.status(500).json({ error: 'Failed to process document: ' + err.message });
+  }
+});
+
+// ========================
+// MERGE PROCESSING (PDFs & Images)
+// ========================
+app.post('/api/process/merge', upload.array('files', 20), async (req, res) => {
+  if (!req.files || req.files.length < 2) return res.status(400).json({ error: 'At least 2 files required' });
+
+  const outputPath = path.join(__dirname, 'output', `merged_${Date.now()}.pdf`);
+  const inputPaths = req.files.map(f => f.path);
+
+  try {
+    const mergedPdf = await PDFDocument.create();
+
+    for (const file of req.files) {
+      const fileBytes = fs.readFileSync(file.path);
+      
+      if (file.mimetype === 'application/pdf') {
+        const pdf = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
+        const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+        copiedPages.forEach((page) => mergedPdf.addPage(page));
+      } else if (file.mimetype.startsWith('image/')) {
+        // Embed image
+        let image;
+        if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/jpg') {
+          image = await mergedPdf.embedJpg(fileBytes);
+        } else if (file.mimetype === 'image/png') {
+          image = await mergedPdf.embedPng(fileBytes);
+        } else {
+          // Convert unsupported images (webp, avif) to png via sharp first
+          const pngBuffer = await sharp(fileBytes).png().toBuffer();
+          image = await mergedPdf.embedPng(pngBuffer);
+        }
+        
+        const dims = image.scale(1);
+        const page = mergedPdf.addPage([dims.width, dims.height]);
+        page.drawImage(image, {
+          x: 0,
+          y: 0,
+          width: dims.width,
+          height: dims.height,
+        });
+      }
+    }
+
+    const savedBytes = await mergedPdf.save({ useObjectStreams: false });
+    fs.writeFileSync(outputPath, savedBytes);
+
+    res.download(outputPath, 'merged_document.pdf', () => {
+      cleanup(...inputPaths, outputPath);
+    });
+  } catch (err) {
+    console.error('Merge processing error:', err);
+    cleanup(...inputPaths, outputPath);
+    res.status(500).json({ error: 'Failed to merge files: ' + err.message });
   }
 });
 

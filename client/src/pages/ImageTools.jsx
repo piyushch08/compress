@@ -1,0 +1,290 @@
+import { useState, useRef, useCallback } from 'react';
+import { Icons } from '../utils/Icons';
+import { Link } from 'react-router-dom';
+
+const API_BASE = 'http://localhost:3001/api/process';
+
+const ASPECT_RATIOS = [
+  { label: 'Original', value: null },
+  { label: '1:1', w: 1, h: 1 },
+  { label: '4:3', w: 4, h: 3 },
+  { label: '16:9', w: 16, h: 9 },
+  { label: '9:16', w: 9, h: 16 },
+  { label: '3:2', w: 3, h: 2 },
+  { label: '21:9', w: 21, h: 9 },
+];
+
+const IMAGE_FORMATS = [
+  { value: 'jpeg', label: 'JPEG' },
+  { value: 'png', label: 'PNG' },
+  { value: 'webp', label: 'WebP' },
+  { value: 'avif', label: 'AVIF' },
+];
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+export default function ImageTools() {
+  const [file, setFile] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [status, setStatus] = useState('idle'); // idle | processing | success | error
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const [width, setWidth] = useState('');
+  const [height, setHeight] = useState('');
+  const [format, setFormat] = useState('');
+  const [quality, setQuality] = useState(80);
+  const [aspectRatio, setAspectRatio] = useState(null);
+
+  const fileInputRef = useRef(null);
+
+  const resetAll = useCallback(() => {
+    setFile(null);
+    setStatus('idle');
+    setErrorMsg('');
+    setWidth('');
+    setHeight('');
+    setFormat('');
+    setQuality(80);
+    setAspectRatio(null);
+  }, []);
+
+  const handleFile = useCallback((selectedFile) => {
+    if (!selectedFile) return;
+    if (selectedFile.size > 500 * 1024 * 1024) {
+        setErrorMsg('File exceeds 500MB limit.');
+        setStatus('error');
+        return;
+    }
+    if (!selectedFile.type.startsWith('image/')) {
+        setErrorMsg('Please upload an image file.');
+        setStatus('error');
+        return;
+    }
+    setFile(selectedFile);
+    setStatus('idle');
+    setErrorMsg('');
+  }, []);
+
+  const onDragOver = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const onDragLeave = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const onDrop = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleFile(e.dataTransfer.files[0]);
+  }, [handleFile]);
+
+  const handleProcess = async () => {
+    if (!file) return;
+    setStatus('processing');
+    setErrorMsg('');
+
+    const formData = new FormData();
+    formData.append('file', file);
+    if (width) formData.append('width', width);
+    if (height) formData.append('height', height);
+    if (format) formData.append('format', format);
+    formData.append('quality', quality);
+    formData.append('maintainAspectRatio', aspectRatio !== null ? 'true' : 'false');
+
+    try {
+      const response = await fetch(`${API_BASE}/image`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `Server error: ${response.statusText}`);
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = downloadUrl;
+      
+      const outExt = format || file.name.split('.').pop();
+      const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+      a.download = `${baseName}_compressed.${outExt}`;
+      
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(downloadUrl);
+      document.body.removeChild(a);
+
+      setStatus('success');
+    } catch (err) {
+      console.error(err);
+      setStatus('error');
+      setErrorMsg(err.message || 'An error occurred during processing.');
+    }
+  };
+
+  return (
+    <div className="main-card">
+      <Link to="/" className="back-link">
+        <Icons.ArrowLeft /> Back to Tools
+      </Link>
+      
+      <div style={{textAlign: 'center', marginBottom: '2rem'}}>
+        <div className="dropzone-icon" style={{margin: '0 auto 1rem'}}><Icons.Image /></div>
+        <h2 style={{color: 'var(--blue-900)', fontSize: '1.5rem', fontWeight: 900}}>Image Compressor & Resizer</h2>
+        <p style={{color: 'var(--dark-muted)'}}>Upload an image to compress, resize, or change its format.</p>
+      </div>
+
+      {!file && (
+        <div
+          className={`dropzone ${isDragging ? 'active' : ''}`}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={(e) => handleFile(e.target.files[0])}
+            style={{ display: 'none' }}
+            accept="image/*"
+          />
+          <div className="dropzone-icon"><Icons.Upload /></div>
+          <h2>Upload Image</h2>
+          <p>Drag and drop your file here, or click to browse</p>
+          <div className="supported">
+            <span className="badge">Max 500MB</span>
+            <span className="badge accent">JPG, PNG, WebP, AVIF</span>
+          </div>
+        </div>
+      )}
+
+      {file && status !== 'success' && (
+        <div className="file-config-section">
+          <div className="file-bar">
+            <div className="file-bar-icon image"><Icons.Image /></div>
+            <div className="file-bar-info">
+              <div className="file-bar-name">{file.name}</div>
+              <div className="file-bar-meta">{formatSize(file.size)}</div>
+            </div>
+            <button className="file-bar-remove" onClick={resetAll} title="Remove file">
+              <Icons.Trash2 />
+            </button>
+          </div>
+
+          {status === 'error' && (
+            <div className="error-banner">
+              <Icons.AlertCircle />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {status === 'processing' ? (
+            <div className="processing-state">
+              <div className="spinner-ring"></div>
+              <div className="processing-label">Processing Image...</div>
+              <p>Please wait while we compress and resize your image.</p>
+            </div>
+          ) : (
+            <div className="options-panel">
+              <div className="section-label">Dimensions & Resizing</div>
+              
+              <div className="options-grid">
+                <div className="option-group">
+                  <label>Width (px)</label>
+                  <input
+                    type="number"
+                    className="input"
+                    placeholder="Auto"
+                    value={width}
+                    onChange={(e) => setWidth(e.target.value)}
+                  />
+                </div>
+                <div className="option-group">
+                  <label>Height (px)</label>
+                  <input
+                    type="number"
+                    className="input"
+                    placeholder="Auto"
+                    value={height}
+                    onChange={(e) => setHeight(e.target.value)}
+                  />
+                </div>
+
+                <div className="option-group full-width">
+                  <label style={{ marginBottom: '0.5rem', display: 'block' }}>Force Aspect Ratio</label>
+                  <div className="aspect-chips">
+                    {ASPECT_RATIOS.map((ratio) => (
+                      <button
+                        key={ratio.label}
+                        className={`chip ${aspectRatio === ratio.label ? 'active' : ''}`}
+                        onClick={() => {
+                          setAspectRatio(ratio.label);
+                          if (ratio.w && ratio.h && width) {
+                            setHeight(Math.round((width / ratio.w) * ratio.h).toString());
+                          }
+                        }}
+                      >
+                        {ratio.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="section-label">Compression & Format</div>
+              <div className="options-grid">
+                <div className="option-group">
+                  <label>Convert To</label>
+                  <select className="select" value={format} onChange={(e) => setFormat(e.target.value)}>
+                    <option value="">Keep Original</option>
+                    {IMAGE_FORMATS.map((f) => (
+                      <option key={f.value} value={f.value}>{f.label}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="range-group">
+                  <div className="range-header">
+                    <label>Quality (Compression)</label>
+                    <span className="range-value">{quality}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="100"
+                    value={quality}
+                    onChange={(e) => setQuality(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <button className="btn-process" onClick={handleProcess}>
+                Compress Image
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {status === 'success' && (
+        <div className="success-state">
+          <div className="success-icon"><Icons.Check /></div>
+          <h3>Processing Complete!</h3>
+          <p>Your image has been optimized and downloaded automatically.</p>
+          <button className="btn-new" onClick={resetAll}>Process Another Image</button>
+        </div>
+      )}
+    </div>
+  );
+}
