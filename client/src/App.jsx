@@ -410,7 +410,7 @@ function App() {
                     <div className="section-label">Optimization</div>
                     <div className="options-grid">
                       <div className="option-group full-width">
-                        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.6' }}>
+                        <p style={{ color: 'var(--dark-muted)', fontSize: '0.9rem', lineHeight: '1.6', fontWeight: '500' }}>
                           We'll strip metadata (author, title, keywords) and optimize the PDF structure to reduce file size.
                         </p>
                       </div>
