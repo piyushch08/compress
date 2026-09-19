@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { Icons } from '../utils/Icons';
 
 export default function Home() {
@@ -38,7 +39,13 @@ export default function Home() {
   ];
 
   return (
-    <div className="home-dashboard">
+    <motion.div 
+      className="home-dashboard"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.3 }}
+    >
       <div className="home-header">
         <h2>Select a Tool</h2>
         <p>Choose the type of file you want to process to access specialized tools.</p>
@@ -60,6 +67,6 @@ export default function Home() {
           </Link>
         ))}
       </div>
-    </div>
+    </motion.div>
   );
 }

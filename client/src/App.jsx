@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
+import { Toaster } from 'react-hot-toast';
 import { Icons } from './utils/Icons';
 
 import Home from './pages/Home';
@@ -9,6 +11,7 @@ import PdfTools from './pages/PdfTools';
 import MergeTools from './pages/MergeTools';
 
 function App() {
+  const location = useLocation();
   // Bug report state
   const [showBugModal, setShowBugModal] = useState(false);
   const [bugName, setBugName] = useState('');
@@ -18,6 +21,7 @@ function App() {
 
   return (
     <>
+      <Toaster position="bottom-center" toastOptions={{ style: { borderRadius: '14px', background: '#ffffff', color: '#0f172a', fontWeight: '600' } }} />
       <header className="app-header">
         <div className="app-logo" style={{ background: 'transparent' }}>
           <img src="/favicon.svg" alt="SHIZEN Logo" style={{ width: '32px', height: '32px' }} />
@@ -26,13 +30,15 @@ function App() {
         <p className="app-subtitle">Premium file compression, conversion, and editing</p>
       </header>
 
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/image" element={<ImageTools />} />
-        <Route path="/video" element={<VideoTools />} />
-        <Route path="/pdf" element={<PdfTools />} />
-        <Route path="/merge" element={<MergeTools />} />
-      </Routes>
+      <AnimatePresence mode="wait">
+        <Routes location={location} key={location.pathname}>
+          <Route path="/" element={<Home />} />
+          <Route path="/image" element={<ImageTools />} />
+          <Route path="/video" element={<VideoTools />} />
+          <Route path="/pdf" element={<PdfTools />} />
+          <Route path="/merge" element={<MergeTools />} />
+        </Routes>
+      </AnimatePresence>
 
       {/* Footer */}
       <footer className="app-footer">

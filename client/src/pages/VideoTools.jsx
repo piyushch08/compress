@@ -3,6 +3,9 @@ import { Icons } from '../utils/Icons';
 import { Link } from 'react-router-dom';
 import ReactCrop from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
+import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
+import confetti from 'canvas-confetti';
 
 const API_BASE = 'http://localhost:3001/api/process';
 
@@ -40,7 +43,6 @@ export default function VideoTools() {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState('idle');
-  const [errorMsg, setErrorMsg] = useState('');
 
   const [width, setWidth] = useState('');
   const [height, setHeight] = useState('');
@@ -65,7 +67,6 @@ export default function VideoTools() {
     setFile(null);
     setPreviewUrl(null);
     setStatus('idle');
-    setErrorMsg('');
     setWidth('');
     setHeight('');
     setFormat('');
@@ -87,19 +88,18 @@ export default function VideoTools() {
   const handleFile = useCallback((selectedFile) => {
     if (!selectedFile) return;
     if (selectedFile.size > 500 * 1024 * 1024) {
-        setErrorMsg('File exceeds 500MB limit.');
-        setStatus('error');
+        toast.error('File exceeds 500MB limit.');
+        setStatus('idle');
         return;
     }
     if (!selectedFile.type.startsWith('video/')) {
-        setErrorMsg('Please upload a video file.');
-        setStatus('error');
+        toast.error('Please upload a video file.');
+        setStatus('idle');
         return;
     }
     setFile(selectedFile);
     setPreviewUrl(window.URL.createObjectURL(selectedFile));
     setStatus('idle');
-    setErrorMsg('');
     setCrop(undefined);
     setCompletedCrop(null);
     setVideoDuration(0);
@@ -153,7 +153,6 @@ export default function VideoTools() {
   const handleProcess = async () => {
     if (!file) return;
     setStatus('processing');
-    setErrorMsg('');
 
     const formData = new FormData();
     formData.append('file', file);
@@ -203,17 +202,25 @@ export default function VideoTools() {
       document.body.removeChild(a);
 
       setStatus('success');
+      toast.success('Video processed successfully!');
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
     } catch (err) {
       console.error(err);
-      setStatus('error');
-      setErrorMsg(err.message || 'An error occurred during processing.');
+      setStatus('idle');
+      toast.error(err.message || 'An error occurred during processing.');
     }
   };
 
   return (
-    <div className="main-card">
-      <Link to="/" className="back-link">
-        <Icons.ArrowLeft /> Back to Tools
+    <motion.div 
+      className="main-card"
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      transition={{ duration: 0.3 }}
+    >
+      <Link to="/" className="btn-back">
+        <Icons.ArrowLeft /> Back to Dashboard
       </Link>
       
       <div style={{textAlign: 'center', marginBottom: '2rem'}}>
@@ -259,13 +266,6 @@ export default function VideoTools() {
               <Icons.Trash2 />
             </button>
           </div>
-
-          {status === 'error' && (
-            <div className="error-banner">
-              <Icons.AlertCircle />
-              <span>{errorMsg}</span>
-            </div>
-          )}
 
           {status === 'processing' ? (
             <div className="processing-state">
@@ -406,6 +406,6 @@ export default function VideoTools() {
           <button className="btn-new" onClick={resetAll}>Process Another Video</button>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }

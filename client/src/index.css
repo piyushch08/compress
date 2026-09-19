@@ -724,6 +724,36 @@ input[type="range"]::-webkit-slider-thumb:hover {
   height: 14px;
 }
 
+/* ===== BACK BUTTON ===== */
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.25rem;
+  background: var(--white);
+  color: var(--blue-600);
+  border: 2px solid var(--blue-100);
+  border-radius: var(--radius-pill);
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+  margin-bottom: 1.5rem;
+  text-decoration: none;
+  transition: all 0.25s;
+}
+
+.btn-back:hover {
+  background: var(--blue-50);
+  border-color: var(--blue-300);
+  transform: translateX(-4px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+}
+
+.btn-back svg {
+  width: 18px;
+  height: 18px;
+}
+
 /* ===== MODAL OVERLAY ===== */
 .modal-overlay {
   position: fixed;

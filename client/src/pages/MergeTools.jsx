@@ -1,6 +1,9 @@
 import { useState, useRef, useCallback } from 'react';
 import { Icons } from '../utils/Icons';
 import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
+import confetti from 'canvas-confetti';
 
 const API_BASE = 'http://localhost:3001/api/process';
 
@@ -14,14 +17,12 @@ export default function MergeTools() {
   const [files, setFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState('idle');
-  const [errorMsg, setErrorMsg] = useState('');
 
   const fileInputRef = useRef(null);
 
   const resetAll = useCallback(() => {
     setFiles([]);
     setStatus('idle');
-    setErrorMsg('');
   }, []);
 
   const handleFiles = useCallback((selectedFiles) => {
@@ -33,13 +34,13 @@ export default function MergeTools() {
     const validFiles = [];
     for (const f of newFiles) {
       if (totalSize + f.size > 500 * 1024 * 1024) {
-        setErrorMsg('Total file size exceeds 500MB limit.');
-        setStatus('error');
+        toast.error('Total file size exceeds 500MB limit.');
+        setStatus('idle');
         break;
       }
       if (!f.type.startsWith('image/') && f.type !== 'application/pdf') {
-        setErrorMsg('Only Images and PDFs are supported for merging.');
-        setStatus('error');
+        toast.error('Only Images and PDFs are supported for merging.');
+        setStatus('idle');
         break;
       }
       validFiles.push(f);
@@ -49,7 +50,6 @@ export default function MergeTools() {
     if (validFiles.length > 0) {
       setFiles(prev => [...prev, ...validFiles]);
       setStatus('idle');
-      setErrorMsg('');
     }
   }, [files]);
 
@@ -75,13 +75,12 @@ export default function MergeTools() {
 
   const handleProcess = async () => {
     if (files.length < 2) {
-      setErrorMsg('Please upload at least 2 files to merge.');
-      setStatus('error');
+      toast.error('Please upload at least 2 files to merge.');
+      setStatus('idle');
       return;
     }
     
     setStatus('processing');
-    setErrorMsg('');
 
     const formData = new FormData();
     files.forEach(f => formData.append('files', f));
@@ -110,17 +109,25 @@ export default function MergeTools() {
       document.body.removeChild(a);
 
       setStatus('success');
+      toast.success('Files merged successfully!');
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
     } catch (err) {
       console.error(err);
-      setStatus('error');
-      setErrorMsg(err.message || 'An error occurred during processing.');
+      setStatus('idle');
+      toast.error(err.message || 'An error occurred during processing.');
     }
   };
 
   return (
-    <div className="main-card">
-      <Link to="/" className="back-link">
-        <Icons.ArrowLeft /> Back to Tools
+    <motion.div 
+      className="main-card"
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      transition={{ duration: 0.3 }}
+    >
+      <Link to="/" className="btn-back">
+        <Icons.ArrowLeft /> Back to Dashboard
       </Link>
       
       <div style={{textAlign: 'center', marginBottom: '2rem'}}>
@@ -173,13 +180,6 @@ export default function MergeTools() {
             ))}
           </div>
 
-          {status === 'error' && (
-            <div className="error-banner">
-              <Icons.AlertCircle />
-              <span>{errorMsg}</span>
-            </div>
-          )}
-
           {status === 'processing' ? (
             <div className="processing-state">
               <div className="spinner-ring" style={{borderTopColor: '#8b5cf6'}}></div>
@@ -202,6 +202,6 @@ export default function MergeTools() {
           <button className="btn-new" onClick={resetAll} style={{borderColor: '#8b5cf6', color: '#8b5cf6'}}>Merge More Files</button>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
