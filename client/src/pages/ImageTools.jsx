@@ -1,17 +1,18 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { Icons } from '../utils/Icons';
 import { Link } from 'react-router-dom';
+import ReactCrop from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 
 const API_BASE = 'http://localhost:3001/api/process';
 
 const ASPECT_RATIOS = [
-  { label: 'Original', value: null },
+  { label: 'Free', value: null },
   { label: '1:1', w: 1, h: 1 },
   { label: '4:3', w: 4, h: 3 },
   { label: '16:9', w: 16, h: 9 },
   { label: '9:16', w: 9, h: 16 },
   { label: '3:2', w: 3, h: 2 },
-  { label: '21:9', w: 21, h: 9 },
 ];
 
 const IMAGE_FORMATS = [
@@ -29,20 +30,30 @@ function formatSize(bytes) {
 
 export default function ImageTools() {
   const [file, setFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [status, setStatus] = useState('idle'); // idle | processing | success | error
+  const [status, setStatus] = useState('idle');
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Editing state
   const [width, setWidth] = useState('');
   const [height, setHeight] = useState('');
   const [format, setFormat] = useState('');
   const [quality, setQuality] = useState(80);
   const [aspectRatio, setAspectRatio] = useState(null);
 
+  // Crop state
+  const imgRef = useRef(null);
+  const [crop, setCrop] = useState();
+  const [completedCrop, setCompletedCrop] = useState(null);
+  const [imageMeta, setImageMeta] = useState({ width: 0, height: 0, scaleX: 1, scaleY: 1 });
+
   const fileInputRef = useRef(null);
 
   const resetAll = useCallback(() => {
+    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
     setFile(null);
+    setPreviewUrl(null);
     setStatus('idle');
     setErrorMsg('');
     setWidth('');
@@ -50,7 +61,16 @@ export default function ImageTools() {
     setFormat('');
     setQuality(80);
     setAspectRatio(null);
-  }, []);
+    setCrop(undefined);
+    setCompletedCrop(null);
+  }, [previewUrl]);
+
+  // Clean up object URL when component unmounts
+  useEffect(() => {
+    return () => {
+      if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   const handleFile = useCallback((selectedFile) => {
     if (!selectedFile) return;
@@ -65,8 +85,11 @@ export default function ImageTools() {
         return;
     }
     setFile(selectedFile);
+    setPreviewUrl(window.URL.createObjectURL(selectedFile));
     setStatus('idle');
     setErrorMsg('');
+    setCrop(undefined);
+    setCompletedCrop(null);
   }, []);
 
   const onDragOver = useCallback((e) => {
@@ -85,6 +108,44 @@ export default function ImageTools() {
     handleFile(e.dataTransfer.files[0]);
   }, [handleFile]);
 
+  const onImageLoad = (e) => {
+    const { naturalWidth, naturalHeight, width, height } = e.currentTarget;
+    setImageMeta({
+      width: naturalWidth,
+      height: naturalHeight,
+      scaleX: naturalWidth / width,
+      scaleY: naturalHeight / height
+    });
+  };
+
+  // Estimate file size
+  const estimatedSize = useMemo(() => {
+    if (!file) return 0;
+    
+    // Heuristic estimation
+    let factor = (quality / 100);
+    
+    // Crop reduction factor
+    let cropFactor = 1;
+    if (completedCrop && completedCrop.width > 0 && completedCrop.height > 0) {
+      // ratio of crop area to full visual area
+      const cropArea = completedCrop.width * completedCrop.height;
+      const fullArea = (imgRef.current?.width || 1) * (imgRef.current?.height || 1);
+      cropFactor = Math.min(1, cropArea / fullArea);
+    }
+    
+    // Resize reduction factor
+    let resizeFactor = 1;
+    if (width && imageMeta.width > 0) {
+      resizeFactor = Math.min(1, Math.pow(parseInt(width) / imageMeta.width, 2));
+    } else if (height && imageMeta.height > 0) {
+      resizeFactor = Math.min(1, Math.pow(parseInt(height) / imageMeta.height, 2));
+    }
+
+    const estimatedBytes = file.size * factor * cropFactor * resizeFactor;
+    return Math.max(1024, estimatedBytes); // Don't show less than 1KB
+  }, [file, quality, completedCrop, width, height, imageMeta]);
+
   const handleProcess = async () => {
     if (!file) return;
     setStatus('processing');
@@ -97,6 +158,17 @@ export default function ImageTools() {
     if (format) formData.append('format', format);
     formData.append('quality', quality);
     formData.append('maintainAspectRatio', aspectRatio !== null ? 'true' : 'false');
+
+    // Add actual image crop coordinates
+    if (completedCrop && imgRef.current && completedCrop.width > 0 && completedCrop.height > 0) {
+      const scaleX = imgRef.current.naturalWidth / imgRef.current.width;
+      const scaleY = imgRef.current.naturalHeight / imgRef.current.height;
+      
+      formData.append('cropX', Math.round(completedCrop.x * scaleX));
+      formData.append('cropY', Math.round(completedCrop.y * scaleY));
+      formData.append('cropWidth', Math.round(completedCrop.width * scaleX));
+      formData.append('cropHeight', Math.round(completedCrop.height * scaleY));
+    }
 
     try {
       const response = await fetch(`${API_BASE}/image`, {
@@ -141,7 +213,7 @@ export default function ImageTools() {
       <div style={{textAlign: 'center', marginBottom: '2rem'}}>
         <div className="dropzone-icon" style={{margin: '0 auto 1rem'}}><Icons.Image /></div>
         <h2 style={{color: 'var(--blue-900)', fontSize: '1.5rem', fontWeight: 900}}>Image Compressor & Resizer</h2>
-        <p style={{color: 'var(--dark-muted)'}}>Upload an image to compress, resize, or change its format.</p>
+        <p style={{color: 'var(--dark-muted)'}}>Upload an image to visually crop, resize, or change its format.</p>
       </div>
 
       {!file && (
@@ -171,11 +243,12 @@ export default function ImageTools() {
 
       {file && status !== 'success' && (
         <div className="file-config-section">
+          
           <div className="file-bar">
             <div className="file-bar-icon image"><Icons.Image /></div>
             <div className="file-bar-info">
               <div className="file-bar-name">{file.name}</div>
-              <div className="file-bar-meta">{formatSize(file.size)}</div>
+              <div className="file-bar-meta">Original: {formatSize(file.size)}</div>
             </div>
             <button className="file-bar-remove" onClick={resetAll} title="Remove file">
               <Icons.Trash2 />
@@ -197,11 +270,31 @@ export default function ImageTools() {
             </div>
           ) : (
             <div className="options-panel">
-              <div className="section-label">Dimensions & Resizing</div>
               
+              <div className="section-label"><Icons.Scissors /> Visual Cropping</div>
+              <div className="visual-editor-container" style={{background: '#f8fafc', padding: '1rem', borderRadius: 'var(--radius-lg)', marginBottom: '1.5rem', display: 'flex', justifyContent: 'center', overflow: 'hidden'}}>
+                {previewUrl && (
+                  <ReactCrop 
+                    crop={crop} 
+                    onChange={(_, percentCrop) => setCrop(percentCrop)}
+                    onComplete={(c) => setCompletedCrop(c)}
+                    aspect={aspectRatio ? (ASPECT_RATIOS.find(r => r.label === aspectRatio)?.w / ASPECT_RATIOS.find(r => r.label === aspectRatio)?.h) : undefined}
+                  >
+                    <img 
+                      ref={imgRef}
+                      src={previewUrl} 
+                      alt="Crop preview" 
+                      onLoad={onImageLoad}
+                      style={{ maxHeight: '400px', maxWidth: '100%', objectFit: 'contain' }}
+                    />
+                  </ReactCrop>
+                )}
+              </div>
+
+              <div className="section-label">Dimensions & Resizing</div>
               <div className="options-grid">
                 <div className="option-group">
-                  <label>Width (px)</label>
+                  <label>Final Width (px)</label>
                   <input
                     type="number"
                     className="input"
@@ -211,7 +304,7 @@ export default function ImageTools() {
                   />
                 </div>
                 <div className="option-group">
-                  <label>Height (px)</label>
+                  <label>Final Height (px)</label>
                   <input
                     type="number"
                     className="input"
@@ -222,18 +315,13 @@ export default function ImageTools() {
                 </div>
 
                 <div className="option-group full-width">
-                  <label style={{ marginBottom: '0.5rem', display: 'block' }}>Force Aspect Ratio</label>
+                  <label style={{ marginBottom: '0.5rem', display: 'block' }}>Crop Aspect Ratio</label>
                   <div className="aspect-chips">
                     {ASPECT_RATIOS.map((ratio) => (
                       <button
                         key={ratio.label}
                         className={`chip ${aspectRatio === ratio.label ? 'active' : ''}`}
-                        onClick={() => {
-                          setAspectRatio(ratio.label);
-                          if (ratio.w && ratio.h && width) {
-                            setHeight(Math.round((width / ratio.w) * ratio.h).toString());
-                          }
-                        }}
+                        onClick={() => setAspectRatio(ratio.label)}
                       >
                         {ratio.label}
                       </button>
@@ -267,6 +355,10 @@ export default function ImageTools() {
                     onChange={(e) => setQuality(e.target.value)}
                   />
                 </div>
+              </div>
+
+              <div className="estimation-badge" style={{textAlign: 'center', marginBottom: '1rem', background: 'var(--blue-50)', padding: '0.75rem', borderRadius: 'var(--radius-md)', color: 'var(--blue-900)', fontWeight: 700}}>
+                Estimated Output Size: ~{formatSize(estimatedSize)}
               </div>
 
               <button className="btn-process" onClick={handleProcess}>

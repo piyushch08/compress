@@ -41,13 +41,23 @@ const cleanup = (...files) => {
 app.post('/api/process/image', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-  const { width, height, format, quality, maintainAspectRatio } = req.body;
+  const { width, height, format, quality, maintainAspectRatio, cropX, cropY, cropWidth, cropHeight } = req.body;
   const inputPath = req.file.path;
   const outFormat = format || 'jpeg';
   const outputPath = path.join(__dirname, 'output', `${req.file.filename}.${outFormat}`);
 
   try {
     let pipeline = sharp(inputPath);
+
+    // Crop if provided
+    if (cropWidth && cropHeight) {
+      pipeline = pipeline.extract({
+        left: parseInt(cropX || 0),
+        top: parseInt(cropY || 0),
+        width: parseInt(cropWidth),
+        height: parseInt(cropHeight)
+      });
+    }
 
     // Resize if width or height is provided
     if (width || height) {
@@ -103,7 +113,7 @@ app.post('/api/process/image', upload.single('file'), async (req, res) => {
 app.post('/api/process/video', upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-  const { width, height, format, videoBitrate, startTime, duration } = req.body;
+  const { width, height, format, videoBitrate, startTime, duration, cropX, cropY, cropWidth, cropHeight } = req.body;
   const inputPath = req.file.path;
   const outFormat = format || 'mp4';
   const outputPath = path.join(__dirname, 'output', `${req.file.filename}.${outFormat}`);
@@ -115,6 +125,14 @@ app.post('/api/process/video', upload.single('file'), (req, res) => {
 
   // Build video filters for resize (ffmpeg needs even numbers)
   const videoFilters = [];
+
+  if (cropWidth && cropHeight) {
+    const cx = parseInt(cropX || 0);
+    const cy = parseInt(cropY || 0);
+    const cw = parseInt(cropWidth);
+    const ch = parseInt(cropHeight);
+    videoFilters.push(`crop=${cw}:${ch}:${cx}:${cy}`);
+  }
   if (width || height) {
     // Ensure dimensions are even (divisible by 2), required by most codecs
     const w = width ? `trunc(${parseInt(width)}/2)*2` : '-2';

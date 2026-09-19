@@ -1,11 +1,13 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { Icons } from '../utils/Icons';
 import { Link } from 'react-router-dom';
+import ReactCrop from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 
 const API_BASE = 'http://localhost:3001/api/process';
 
 const ASPECT_RATIOS = [
-  { label: 'Original', value: null },
+  { label: 'Free', value: null },
   { label: '16:9', w: 16, h: 9 },
   { label: '9:16', w: 9, h: 16 },
   { label: '4:3', w: 4, h: 3 },
@@ -35,6 +37,7 @@ function formatSize(bytes) {
 
 export default function VideoTools() {
   const [file, setFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState('idle');
   const [errorMsg, setErrorMsg] = useState('');
@@ -49,10 +52,18 @@ export default function VideoTools() {
   const [startTime, setStartTime] = useState('');
   const [duration, setDuration] = useState('');
 
+  // Crop & Video state
+  const videoRef = useRef(null);
+  const [crop, setCrop] = useState();
+  const [completedCrop, setCompletedCrop] = useState(null);
+  const [videoDuration, setVideoDuration] = useState(0);
+
   const fileInputRef = useRef(null);
 
   const resetAll = useCallback(() => {
+    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
     setFile(null);
+    setPreviewUrl(null);
     setStatus('idle');
     setErrorMsg('');
     setWidth('');
@@ -62,7 +73,16 @@ export default function VideoTools() {
     setAspectRatio(null);
     setStartTime('');
     setDuration('');
-  }, []);
+    setCrop(undefined);
+    setCompletedCrop(null);
+    setVideoDuration(0);
+  }, [previewUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   const handleFile = useCallback((selectedFile) => {
     if (!selectedFile) return;
@@ -77,8 +97,12 @@ export default function VideoTools() {
         return;
     }
     setFile(selectedFile);
+    setPreviewUrl(window.URL.createObjectURL(selectedFile));
     setStatus('idle');
     setErrorMsg('');
+    setCrop(undefined);
+    setCompletedCrop(null);
+    setVideoDuration(0);
   }, []);
 
   const onDragOver = useCallback((e) => {
@@ -97,6 +121,35 @@ export default function VideoTools() {
     handleFile(e.dataTransfer.files[0]);
   }, [handleFile]);
 
+  const onVideoLoadedMetadata = (e) => {
+    setVideoDuration(e.currentTarget.duration);
+  };
+
+  // Estimate file size based on bitrate and duration
+  const estimatedSize = useMemo(() => {
+    if (!file) return 0;
+    
+    // Duration in seconds
+    let finalDuration = videoDuration;
+    if (duration && !isNaN(parseInt(duration))) {
+      finalDuration = parseInt(duration);
+    } else if (startTime && !isNaN(parseInt(startTime))) {
+      finalDuration = Math.max(0, videoDuration - parseInt(startTime));
+    }
+
+    if (finalDuration <= 0) finalDuration = 1;
+
+    // Bitrate calculation
+    const kbps = parseInt(videoBitrate.replace('k', ''));
+    const bitsPerSec = kbps * 1000;
+    const bytesPerSec = bitsPerSec / 8;
+    
+    // Total video bytes + 10% overhead for audio/container
+    const estimatedBytes = (finalDuration * bytesPerSec) * 1.10;
+    
+    return Math.max(1024, estimatedBytes); // Minimum 1KB
+  }, [file, videoDuration, duration, startTime, videoBitrate]);
+
   const handleProcess = async () => {
     if (!file) return;
     setStatus('processing');
@@ -111,6 +164,17 @@ export default function VideoTools() {
     
     if (startTime) formData.append('startTime', startTime);
     if (duration) formData.append('duration', duration);
+
+    // Add actual video crop coordinates
+    if (completedCrop && videoRef.current && completedCrop.width > 0 && completedCrop.height > 0) {
+      const scaleX = videoRef.current.videoWidth / videoRef.current.clientWidth;
+      const scaleY = videoRef.current.videoHeight / videoRef.current.clientHeight;
+      
+      formData.append('cropX', Math.round(completedCrop.x * scaleX));
+      formData.append('cropY', Math.round(completedCrop.y * scaleY));
+      formData.append('cropWidth', Math.round(completedCrop.width * scaleX));
+      formData.append('cropHeight', Math.round(completedCrop.height * scaleY));
+    }
 
     try {
       const response = await fetch(`${API_BASE}/video`, {
@@ -155,7 +219,7 @@ export default function VideoTools() {
       <div style={{textAlign: 'center', marginBottom: '2rem'}}>
         <div className="dropzone-icon" style={{margin: '0 auto 1rem'}}><Icons.Video /></div>
         <h2 style={{color: 'var(--blue-900)', fontSize: '1.5rem', fontWeight: 900}}>Video Compressor & Trimmer</h2>
-        <p style={{color: 'var(--dark-muted)'}}>Compress, trim duration, and change aspect ratio of videos.</p>
+        <p style={{color: 'var(--dark-muted)'}}>Upload a video to visually crop, trim duration, and compress.</p>
       </div>
 
       {!file && (
@@ -189,7 +253,7 @@ export default function VideoTools() {
             <div className="file-bar-icon video"><Icons.Video /></div>
             <div className="file-bar-info">
               <div className="file-bar-name">{file.name}</div>
-              <div className="file-bar-meta">{formatSize(file.size)}</div>
+              <div className="file-bar-meta">Original: {formatSize(file.size)}</div>
             </div>
             <button className="file-bar-remove" onClick={resetAll} title="Remove file">
               <Icons.Trash2 />
@@ -212,6 +276,32 @@ export default function VideoTools() {
           ) : (
             <div className="options-panel">
               
+              <div className="section-label"><Icons.Video /> Visual Review & Cropping</div>
+              <div className="visual-editor-container" style={{background: '#f8fafc', padding: '1rem', borderRadius: 'var(--radius-lg)', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'hidden'}}>
+                {previewUrl && (
+                  <>
+                    <ReactCrop 
+                      crop={crop} 
+                      onChange={(_, percentCrop) => setCrop(percentCrop)}
+                      onComplete={(c) => setCompletedCrop(c)}
+                      aspect={aspectRatio ? (ASPECT_RATIOS.find(r => r.label === aspectRatio)?.w / ASPECT_RATIOS.find(r => r.label === aspectRatio)?.h) : undefined}
+                      style={{ marginBottom: '1rem' }}
+                    >
+                      <video 
+                        ref={videoRef}
+                        src={previewUrl} 
+                        onLoadedMetadata={onVideoLoadedMetadata}
+                        controls
+                        style={{ maxHeight: '400px', maxWidth: '100%', objectFit: 'contain' }}
+                      />
+                    </ReactCrop>
+                    <p style={{color: 'var(--dark-muted)', fontSize: '0.85rem', textAlign: 'center'}}>
+                      Drag the edges to crop the video frame. Use the video controls to review content and find trim times.
+                    </p>
+                  </>
+                )}
+              </div>
+
               <div className="section-label"><Icons.Scissors /> Trim Video</div>
               <div className="options-grid">
                 <div className="option-group">
@@ -229,7 +319,7 @@ export default function VideoTools() {
                   <input
                     type="number"
                     className="input"
-                    placeholder="Leave empty to keep rest of video"
+                    placeholder="Leave empty to keep rest"
                     value={duration}
                     onChange={(e) => setDuration(e.target.value)}
                   />
@@ -239,7 +329,7 @@ export default function VideoTools() {
               <div className="section-label">Dimensions & Resizing</div>
               <div className="options-grid">
                 <div className="option-group">
-                  <label>Width (px)</label>
+                  <label>Final Width (px)</label>
                   <input
                     type="number"
                     className="input"
@@ -249,7 +339,7 @@ export default function VideoTools() {
                   />
                 </div>
                 <div className="option-group">
-                  <label>Height (px)</label>
+                  <label>Final Height (px)</label>
                   <input
                     type="number"
                     className="input"
@@ -260,18 +350,13 @@ export default function VideoTools() {
                 </div>
 
                 <div className="option-group full-width">
-                  <label style={{ marginBottom: '0.5rem', display: 'block' }}>Aspect Ratio</label>
+                  <label style={{ marginBottom: '0.5rem', display: 'block' }}>Crop Aspect Ratio</label>
                   <div className="aspect-chips">
                     {ASPECT_RATIOS.map((ratio) => (
                       <button
                         key={ratio.label}
                         className={`chip ${aspectRatio === ratio.label ? 'active' : ''}`}
-                        onClick={() => {
-                          setAspectRatio(ratio.label);
-                          if (ratio.w && ratio.h && width) {
-                            setHeight(Math.round((width / ratio.w) * ratio.h).toString());
-                          }
-                        }}
+                        onClick={() => setAspectRatio(ratio.label)}
                       >
                         {ratio.label}
                       </button>
@@ -299,6 +384,10 @@ export default function VideoTools() {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div className="estimation-badge" style={{textAlign: 'center', marginBottom: '1rem', background: 'var(--blue-50)', padding: '0.75rem', borderRadius: 'var(--radius-md)', color: 'var(--blue-900)', fontWeight: 700}}>
+                Estimated Output Size: ~{formatSize(estimatedSize)}
               </div>
 
               <button className="btn-process" onClick={handleProcess}>
