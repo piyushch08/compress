@@ -287,6 +287,20 @@ export default function ImageTools() {
                   </ReactCrop>
                 )}
               </div>
+              
+              {completedCrop && completedCrop.width > 0 && completedCrop.height > 0 && (
+                <div style={{width: '100%', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 1rem'}}>
+                  <span style={{fontSize: '0.85rem', color: 'var(--dark-muted)', fontWeight: 600}}>
+                    Crop Size: {Math.round(completedCrop.width)} x {Math.round(completedCrop.height)} px
+                  </span>
+                  <button 
+                    onClick={() => { setCrop(undefined); setCompletedCrop(null); }}
+                    style={{background: 'none', border: 'none', color: '#ef4444', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem'}}
+                  >
+                    <Icons.Trash2 /> Clear Crop
+                  </button>
+                </div>
+              )}
 
               <div className="section-label">Dimensions & Resizing</div>
               <div className="options-grid">

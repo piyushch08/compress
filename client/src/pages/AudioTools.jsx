@@ -27,6 +27,13 @@ function formatSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
 }
 
+function formatTime(seconds) {
+  if (!seconds || isNaN(seconds)) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
 export default function AudioTools() {
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -38,12 +45,18 @@ export default function AudioTools() {
   const [audioBitrate, setAudioBitrate] = useState('128k');
   const [enhance, setEnhance] = useState(false);
   
+  // Enhancement intensity controls
+  const [voiceIntensity, setVoiceIntensity] = useState(50);
+  const [instrumentsIntensity, setInstrumentsIntensity] = useState(50);
+  const [beatsIntensity, setBeatsIntensity] = useState(50);
+  
   // Trimming states
-  const [startTime, setStartTime] = useState('');
-  const [duration, setDuration] = useState('');
-
+  const [startTime, setStartTime] = useState(0);
+  const [endTime, setEndTime] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
+  
   const fileInputRef = useRef(null);
+  const audioRef = useRef(null);
 
   const resetAll = useCallback(() => {
     if (previewUrl) window.URL.revokeObjectURL(previewUrl);
@@ -55,8 +68,11 @@ export default function AudioTools() {
     setFormat('mp3');
     setAudioBitrate('128k');
     setEnhance(false);
-    setStartTime('');
-    setDuration('');
+    setVoiceIntensity(50);
+    setInstrumentsIntensity(50);
+    setBeatsIntensity(50);
+    setStartTime(0);
+    setEndTime(0);
     setAudioDuration(0);
   }, [previewUrl]);
 
@@ -103,7 +119,24 @@ export default function AudioTools() {
   }, [handleFile]);
 
   const onAudioLoadedMetadata = (e) => {
-    setAudioDuration(e.currentTarget.duration);
+    const dur = e.currentTarget.duration;
+    setAudioDuration(dur);
+    setEndTime(dur);
+    setStartTime(0);
+  };
+
+  const handleStartTimeChange = (e) => {
+    const val = parseFloat(e.target.value);
+    if (val >= endTime) return;
+    setStartTime(val);
+    if (audioRef.current) audioRef.current.currentTime = val;
+  };
+
+  const handleEndTimeChange = (e) => {
+    const val = parseFloat(e.target.value);
+    if (val <= startTime) return;
+    setEndTime(val);
+    if (audioRef.current) audioRef.current.currentTime = val;
   };
 
   // Estimate file size based on bitrate and duration
@@ -112,10 +145,8 @@ export default function AudioTools() {
     
     // Duration in seconds
     let finalDuration = audioDuration;
-    if (duration && !isNaN(parseInt(duration))) {
-      finalDuration = parseInt(duration);
-    } else if (startTime && !isNaN(parseInt(startTime))) {
-      finalDuration = Math.max(0, audioDuration - parseInt(startTime));
+    if (endTime > startTime) {
+      finalDuration = endTime - startTime;
     }
 
     if (finalDuration <= 0) finalDuration = 1;
@@ -139,10 +170,18 @@ export default function AudioTools() {
     formData.append('file', file);
     if (format) formData.append('format', format);
     if (audioBitrate) formData.append('audioBitrate', audioBitrate);
-    if (enhance) formData.append('enhance', 'true');
     
-    if (startTime) formData.append('startTime', startTime);
-    if (duration) formData.append('duration', duration);
+    if (enhance) {
+      formData.append('enhance', 'true');
+      formData.append('voiceIntensity', voiceIntensity);
+      formData.append('instrumentsIntensity', instrumentsIntensity);
+      formData.append('beatsIntensity', beatsIntensity);
+    }
+    
+    if (startTime > 0) formData.append('startTime', startTime);
+    if (endTime > 0 && endTime < audioDuration) {
+      formData.append('duration', endTime - startTime);
+    }
 
     try {
       const response = await fetch(`${API_BASE}/audio`, {
@@ -242,6 +281,7 @@ export default function AudioTools() {
                 {previewUrl && (
                   <>
                     <audio 
+                      ref={audioRef}
                       src={previewUrl} 
                       onLoadedMetadata={onAudioLoadedMetadata}
                       controls
@@ -255,26 +295,40 @@ export default function AudioTools() {
               </div>
 
               <div className="section-label">Trim Audio</div>
-              <div className="options-grid">
-                <div className="option-group">
-                  <label>Start Time (e.g. 00:00:10 or 10)</label>
-                  <input
-                    type="text"
-                    className="input"
-                    placeholder="Leave empty to keep start"
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                  />
-                </div>
-                <div className="option-group">
-                  <label>Duration (in seconds)</label>
-                  <input
-                    type="number"
-                    className="input"
-                    placeholder="Leave empty to keep rest"
-                    value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
-                  />
+              <div className="options-grid" style={{ gridTemplateColumns: '1fr' }}>
+                <div className="option-group full-width" style={{background: '#f8fafc', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--blue-100)'}}>
+                  
+                  <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem'}}>
+                    <span style={{fontSize: '0.9rem', fontWeight: 600, color: 'var(--dark-muted)'}}>Start: {formatTime(startTime)}</span>
+                    <span style={{fontSize: '0.9rem', fontWeight: 600, color: 'var(--dark-muted)'}}>End: {formatTime(endTime)}</span>
+                  </div>
+
+                  <div style={{display: 'flex', gap: '1rem', alignItems: 'center'}}>
+                    <input
+                      type="range"
+                      min="0"
+                      max={audioDuration}
+                      step="0.1"
+                      value={startTime}
+                      onChange={handleStartTimeChange}
+                      style={{ flex: 1, accentColor: '#8b5cf6', cursor: 'pointer' }}
+                      title="Start Time"
+                    />
+                    <input
+                      type="range"
+                      min="0"
+                      max={audioDuration}
+                      step="0.1"
+                      value={endTime}
+                      onChange={handleEndTimeChange}
+                      style={{ flex: 1, accentColor: '#8b5cf6', cursor: 'pointer' }}
+                      title="End Time"
+                    />
+                  </div>
+                  
+                  <div style={{textAlign: 'center', marginTop: '1rem', fontSize: '0.85rem', color: 'var(--dark-muted)'}}>
+                    <strong>Trimmed Duration:</strong> {formatTime(endTime - startTime)}
+                  </div>
                 </div>
               </div>
 
@@ -313,6 +367,59 @@ export default function AudioTools() {
                       <span style={{fontSize: '0.85rem', fontWeight: 500, color: 'var(--dark-muted)'}}>Normalizes volume, boosts vocals, and balances harsh peaks.</span>
                     </div>
                   </label>
+                  
+                  {enhance && (
+                    <div style={{marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--gray-200)'}}>
+                      <h4 style={{fontSize: '0.95rem', fontWeight: 700, color: 'var(--blue-900)', marginBottom: '1rem'}}>Adjust Intensity</h4>
+                      
+                      <div style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
+                        <div style={{display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
+                          <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: 600, color: 'var(--dark-muted)'}}>
+                            <span>Voice / Vocals</span>
+                            <span>{voiceIntensity}%</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="0" 
+                            max="100" 
+                            value={voiceIntensity} 
+                            onChange={(e) => setVoiceIntensity(e.target.value)} 
+                            style={{accentColor: '#8b5cf6', cursor: 'pointer'}} 
+                          />
+                        </div>
+
+                        <div style={{display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
+                          <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: 600, color: 'var(--dark-muted)'}}>
+                            <span>Instruments</span>
+                            <span>{instrumentsIntensity}%</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="0" 
+                            max="100" 
+                            value={instrumentsIntensity} 
+                            onChange={(e) => setInstrumentsIntensity(e.target.value)} 
+                            style={{accentColor: '#8b5cf6', cursor: 'pointer'}} 
+                          />
+                        </div>
+
+                        <div style={{display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
+                          <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: 600, color: 'var(--dark-muted)'}}>
+                            <span>Beats / Bass</span>
+                            <span>{beatsIntensity}%</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="0" 
+                            max="100" 
+                            value={beatsIntensity} 
+                            onChange={(e) => setBeatsIntensity(e.target.value)} 
+                            style={{accentColor: '#8b5cf6', cursor: 'pointer'}} 
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

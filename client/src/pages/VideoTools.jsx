@@ -38,6 +38,13 @@ function formatSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
 }
 
+function formatTime(seconds) {
+  if (!seconds || isNaN(seconds)) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
 export default function VideoTools() {
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -52,8 +59,8 @@ export default function VideoTools() {
   const [aspectRatio, setAspectRatio] = useState(null);
   
   // Trimming states
-  const [startTime, setStartTime] = useState('');
-  const [duration, setDuration] = useState('');
+  const [startTime, setStartTime] = useState(0);
+  const [endTime, setEndTime] = useState(0);
 
   // Crop & Video state
   const videoRef = useRef(null);
@@ -75,8 +82,8 @@ export default function VideoTools() {
     setFormat('');
     setVideoBitrate('1000k');
     setAspectRatio(null);
-    setStartTime('');
-    setDuration('');
+    setStartTime(0);
+    setEndTime(0);
     setCrop(undefined);
     setCompletedCrop(null);
     setVideoDuration(0);
@@ -127,7 +134,24 @@ export default function VideoTools() {
   }, [handleFile]);
 
   const onVideoLoadedMetadata = (e) => {
-    setVideoDuration(e.currentTarget.duration);
+    const dur = e.currentTarget.duration;
+    setVideoDuration(dur);
+    setEndTime(dur);
+    setStartTime(0);
+  };
+
+  const handleStartTimeChange = (e) => {
+    const val = parseFloat(e.target.value);
+    if (val >= endTime) return;
+    setStartTime(val);
+    if (videoRef.current) videoRef.current.currentTime = val;
+  };
+
+  const handleEndTimeChange = (e) => {
+    const val = parseFloat(e.target.value);
+    if (val <= startTime) return;
+    setEndTime(val);
+    if (videoRef.current) videoRef.current.currentTime = val;
   };
 
   // Estimate file size based on bitrate and duration
@@ -136,10 +160,8 @@ export default function VideoTools() {
     
     // Duration in seconds
     let finalDuration = videoDuration;
-    if (duration && !isNaN(parseInt(duration))) {
-      finalDuration = parseInt(duration);
-    } else if (startTime && !isNaN(parseInt(startTime))) {
-      finalDuration = Math.max(0, videoDuration - parseInt(startTime));
+    if (endTime > startTime) {
+      finalDuration = endTime - startTime;
     }
 
     if (finalDuration <= 0) finalDuration = 1;
@@ -166,8 +188,10 @@ export default function VideoTools() {
     if (format) formData.append('format', format);
     formData.append('videoBitrate', videoBitrate);
     
-    if (startTime) formData.append('startTime', startTime);
-    if (duration) formData.append('duration', duration);
+    if (startTime > 0) formData.append('startTime', startTime);
+    if (endTime > 0 && endTime < videoDuration) {
+      formData.append('duration', endTime - startTime);
+    }
 
     // Add actual video crop coordinates
     if (completedCrop && videoRef.current && completedCrop.width > 0 && completedCrop.height > 0) {
@@ -292,7 +316,22 @@ export default function VideoTools() {
                         style={{ width: '100%', height: 'auto', maxHeight: '400px' }}
                       />
                     </ReactCrop>
-                    <p style={{color: 'var(--dark-muted)', fontSize: '0.85rem', textAlign: 'center'}}>
+                    
+                    {completedCrop && completedCrop.width > 0 && completedCrop.height > 0 && (
+                      <div style={{width: '100%', marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                        <span style={{fontSize: '0.85rem', color: 'var(--dark-muted)', fontWeight: 600}}>
+                          Crop Size: {Math.round(completedCrop.width)} x {Math.round(completedCrop.height)} px
+                        </span>
+                        <button 
+                          onClick={() => { setCrop(undefined); setCompletedCrop(null); }}
+                          style={{background: 'none', border: 'none', color: '#ef4444', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem'}}
+                        >
+                          <Icons.Trash2 /> Clear Crop
+                        </button>
+                      </div>
+                    )}
+
+                    <p style={{color: 'var(--dark-muted)', fontSize: '0.85rem', textAlign: 'center', marginTop: '1rem'}}>
                       Drag the edges to crop the video frame. Use the video controls to review content and find trim times.
                     </p>
                   </>
@@ -300,26 +339,40 @@ export default function VideoTools() {
               </div>
 
               <div className="section-label">Trim Video</div>
-              <div className="options-grid">
-                <div className="option-group">
-                  <label>Start Time (e.g. 00:00:10 or 10)</label>
-                  <input
-                    type="text"
-                    className="input"
-                    placeholder="Leave empty to keep start"
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                  />
-                </div>
-                <div className="option-group">
-                  <label>Duration (in seconds)</label>
-                  <input
-                    type="number"
-                    className="input"
-                    placeholder="Leave empty to keep rest"
-                    value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
-                  />
+              <div className="options-grid" style={{ gridTemplateColumns: '1fr' }}>
+                <div className="option-group full-width" style={{background: '#f8fafc', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--blue-100)'}}>
+                  
+                  <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem'}}>
+                    <span style={{fontSize: '0.9rem', fontWeight: 600, color: 'var(--dark-muted)'}}>Start: {formatTime(startTime)}</span>
+                    <span style={{fontSize: '0.9rem', fontWeight: 600, color: 'var(--dark-muted)'}}>End: {formatTime(endTime)}</span>
+                  </div>
+
+                  <div style={{display: 'flex', gap: '1rem', alignItems: 'center'}}>
+                    <input
+                      type="range"
+                      min="0"
+                      max={videoDuration}
+                      step="0.1"
+                      value={startTime}
+                      onChange={handleStartTimeChange}
+                      style={{ flex: 1, accentColor: '#2563eb', cursor: 'pointer' }}
+                      title="Start Time"
+                    />
+                    <input
+                      type="range"
+                      min="0"
+                      max={videoDuration}
+                      step="0.1"
+                      value={endTime}
+                      onChange={handleEndTimeChange}
+                      style={{ flex: 1, accentColor: '#2563eb', cursor: 'pointer' }}
+                      title="End Time"
+                    />
+                  </div>
+                  
+                  <div style={{textAlign: 'center', marginTop: '1rem', fontSize: '0.85rem', color: 'var(--dark-muted)'}}>
+                    <strong>Trimmed Duration:</strong> {formatTime(endTime - startTime)}
+                  </div>
                 </div>
               </div>
 
