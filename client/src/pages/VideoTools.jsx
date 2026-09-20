@@ -175,7 +175,7 @@ export default function VideoTools() {
     const estimatedBytes = (finalDuration * bytesPerSec) * 1.10;
     
     return Math.max(1024, estimatedBytes); // Minimum 1KB
-  }, [file, videoDuration, duration, startTime, videoBitrate]);
+  }, [file, videoDuration, endTime, startTime, videoBitrate]);
 
   const handleProcess = async () => {
     if (!file) return;

@@ -160,7 +160,7 @@ export default function AudioTools() {
     const estimatedBytes = (finalDuration * bytesPerSec) * 1.02;
     
     return Math.max(1024, estimatedBytes); // Minimum 1KB
-  }, [file, audioDuration, duration, startTime, audioBitrate]);
+  }, [file, audioDuration, endTime, startTime, audioBitrate]);
 
   const handleProcess = async () => {
     if (!file) return;
