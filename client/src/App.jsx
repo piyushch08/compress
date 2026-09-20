@@ -1,15 +1,24 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
 import { Icons } from './utils/Icons';
 
-import Home from './pages/Home';
-import ImageTools from './pages/ImageTools';
-import VideoTools from './pages/VideoTools';
-import AudioTools from './pages/AudioTools';
-import PdfTools from './pages/PdfTools';
-import MergeTools from './pages/MergeTools';
+import confetti from 'canvas-confetti';
+
+const Home = lazy(() => import('./pages/Home'));
+const ImageTools = lazy(() => import('./pages/ImageTools'));
+const VideoTools = lazy(() => import('./pages/VideoTools'));
+const AudioTools = lazy(() => import('./pages/AudioTools'));
+const PdfTools = lazy(() => import('./pages/PdfTools'));
+const MergeTools = lazy(() => import('./pages/MergeTools'));
+
+const PageLoader = () => (
+  <div className="page-loader" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh' }}>
+    <div className="spinner-ring"></div>
+    <p style={{ color: 'var(--white-70)', fontWeight: 600 }}>Loading awesome tools...</p>
+  </div>
+);
 
 function App() {
   const location = useLocation();
@@ -32,14 +41,16 @@ function App() {
       </header>
 
       <AnimatePresence mode="wait">
-        <Routes location={location} key={location.pathname}>
-          <Route path="/" element={<Home />} />
-          <Route path="/image" element={<ImageTools />} />
-          <Route path="/video" element={<VideoTools />} />
-          <Route path="/audio" element={<AudioTools />} />
-          <Route path="/pdf" element={<PdfTools />} />
-          <Route path="/merge" element={<MergeTools />} />
-        </Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes location={location} key={location.pathname}>
+            <Route path="/" element={<Home />} />
+            <Route path="/image" element={<ImageTools />} />
+            <Route path="/video" element={<VideoTools />} />
+            <Route path="/audio" element={<AudioTools />} />
+            <Route path="/pdf" element={<PdfTools />} />
+            <Route path="/merge" element={<MergeTools />} />
+          </Routes>
+        </Suspense>
       </AnimatePresence>
 
       {/* Footer */}
@@ -58,11 +69,12 @@ function App() {
         <div className="footer-copyright">
           © {new Date().getFullYear()} <a href="https://github.com/piyushch08" target="_blank" rel="noopener noreferrer">Piyush Chauhan</a>. All rights reserved.
         </div>
-        <div className="footer-divider" />
-        <button className="btn-report-bug" onClick={() => { setShowBugModal(true); setBugStatus('idle'); }}>
-          <Icons.Bug /> Report a Bug
-        </button>
       </footer>
+
+      {/* Floating Action Button (Quick Help / Bug) */}
+      <button className="floating-help-btn" onClick={() => { setShowBugModal(true); setBugStatus('idle'); }} title="Report a Bug / Feedback">
+        <Icons.Bug />
+      </button>
 
       {/* Bug Report Modal */}
       {showBugModal && (
@@ -101,6 +113,12 @@ function App() {
                     });
                     if (res.ok) {
                       setBugStatus('sent');
+                      confetti({
+                        particleCount: 100,
+                        spread: 70,
+                        origin: { y: 0.6 },
+                        colors: ['#3b82f6', '#10b981', '#ec4899']
+                      });
                     } else {
                       throw new Error('Failed');
                     }
