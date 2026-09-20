@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Icons } from '../utils/Icons';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -17,13 +17,22 @@ export default function MergeTools() {
   const [files, setFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState('idle');
+  const [processedFile, setProcessedFile] = useState(null);
 
   const fileInputRef = useRef(null);
 
   const resetAll = useCallback(() => {
+    if (processedFile?.url) window.URL.revokeObjectURL(processedFile.url);
     setFiles([]);
     setStatus('idle');
-  }, []);
+    setProcessedFile(null);
+  }, [processedFile]);
+
+  useEffect(() => {
+    return () => {
+      if (processedFile?.url) window.URL.revokeObjectURL(processedFile.url);
+    };
+  }, [processedFile]);
 
   const handleFiles = useCallback((selectedFiles) => {
     if (!selectedFiles || selectedFiles.length === 0) return;
@@ -49,6 +58,7 @@ export default function MergeTools() {
 
     if (validFiles.length > 0) {
       setFiles(prev => [...prev, ...validFiles]);
+      setProcessedFile(null);
       setStatus('idle');
     }
   }, [files]);
@@ -98,16 +108,9 @@ export default function MergeTools() {
 
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = downloadUrl;
-      a.download = `merged_document.pdf`;
+      const finalName = `merged_document.pdf`;
       
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(downloadUrl);
-      document.body.removeChild(a);
-
+      setProcessedFile({ url: downloadUrl, name: finalName });
       setStatus('success');
       toast.success('Files merged successfully!');
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
@@ -193,12 +196,22 @@ export default function MergeTools() {
         </div>
       )}
 
-      {status === 'success' && (
+      {status === 'success' && processedFile && (
         <div className="success-state">
           <div className="success-icon"><Icons.Check /></div>
           <h3>Merging Complete!</h3>
-          <p>Your merged PDF has been downloaded automatically.</p>
-          <button className="btn-new" onClick={resetAll} style={{borderColor: '#8b5cf6', color: '#8b5cf6'}}>Merge More Files</button>
+          <p>Review your merged PDF below.</p>
+          
+          <div style={{ margin: '1.5rem 0', display: 'flex', justifyContent: 'center' }}>
+            <iframe src={`${processedFile.url}#view=FitH`} style={{ width: '100%', height: '500px', border: '1px solid var(--gray-200)', borderRadius: 'var(--radius-md)' }} title="PDF Preview" />
+          </div>
+
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <a href={processedFile.url} download={processedFile.name} className="btn-process" style={{ width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}>
+              <Icons.Download /> Download PDF
+            </a>
+            <button className="btn-new" onClick={resetAll} style={{ marginTop: 0, borderColor: '#8b5cf6', color: '#8b5cf6' }}>Merge More Files</button>
+          </div>
         </div>
       )}
     </motion.div>

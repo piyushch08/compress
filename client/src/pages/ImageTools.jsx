@@ -34,6 +34,7 @@ function formatSize(bytes) {
 export default function ImageTools() {
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [processedFile, setProcessedFile] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState('idle');
 
@@ -54,8 +55,10 @@ export default function ImageTools() {
 
   const resetAll = useCallback(() => {
     if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+    if (processedFile?.url) window.URL.revokeObjectURL(processedFile.url);
     setFile(null);
     setPreviewUrl(null);
+    setProcessedFile(null);
     setStatus('idle');
     setWidth('');
     setHeight('');
@@ -70,8 +73,9 @@ export default function ImageTools() {
   useEffect(() => {
     return () => {
       if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+      if (processedFile?.url) window.URL.revokeObjectURL(processedFile.url);
     };
-  }, [previewUrl]);
+  }, [previewUrl, processedFile]);
 
   const handleFile = useCallback((selectedFile) => {
     if (!selectedFile) return;
@@ -87,6 +91,7 @@ export default function ImageTools() {
     }
     setFile(selectedFile);
     setPreviewUrl(window.URL.createObjectURL(selectedFile));
+    setProcessedFile(null);
     setStatus('idle');
     setCrop(undefined);
     setCompletedCrop(null);
@@ -182,19 +187,12 @@ export default function ImageTools() {
 
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = downloadUrl;
       
       const outExt = format || file.name.split('.').pop();
       const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-      a.download = `${baseName}_compressed.${outExt}`;
+      const finalName = `${baseName}_optimized.${outExt}`;
       
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(downloadUrl);
-      document.body.removeChild(a);
-
+      setProcessedFile({ url: downloadUrl, name: finalName });
       setStatus('success');
       toast.success('Image processed successfully!');
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
@@ -279,13 +277,13 @@ export default function ImageTools() {
                     onComplete={(c) => setCompletedCrop(c)}
                     aspect={aspectRatio ? (ASPECT_RATIOS.find(r => r.label === aspectRatio)?.w / ASPECT_RATIOS.find(r => r.label === aspectRatio)?.h) : undefined}
                   >
-                    <img 
-                      ref={imgRef}
-                      src={previewUrl} 
-                      alt="Crop preview" 
-                      onLoad={onImageLoad}
-                      style={{ maxHeight: '400px', maxWidth: '100%', objectFit: 'contain' }}
-                    />
+                      <img 
+                        ref={imgRef}
+                        src={previewUrl} 
+                        onLoad={onImageLoad}
+                        alt="Upload preview" 
+                        style={{ width: '100%', height: 'auto', maxHeight: '400px', display: 'block' }}
+                      />
                   </ReactCrop>
                 )}
               </div>
@@ -368,12 +366,22 @@ export default function ImageTools() {
         </div>
       )}
 
-      {status === 'success' && (
+      {status === 'success' && processedFile && (
         <div className="success-state">
           <div className="success-icon"><Icons.Check /></div>
           <h3>Processing Complete!</h3>
-          <p>Your image has been optimized and downloaded automatically.</p>
-          <button className="btn-new" onClick={resetAll}>Process Another Image</button>
+          <p>Review your optimized image below.</p>
+          
+          <div style={{ margin: '1.5rem 0', display: 'flex', justifyContent: 'center' }}>
+            <img src={processedFile.url} alt="Processed" style={{ maxWidth: '100%', maxHeight: '400px', borderRadius: 'var(--radius-md)' }} />
+          </div>
+
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <a href={processedFile.url} download={processedFile.name} className="btn-process" style={{ width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}>
+              <Icons.Download /> Download Image
+            </a>
+            <button className="btn-new" onClick={resetAll} style={{ marginTop: 0 }}>Process Another Image</button>
+          </div>
         </div>
       )}
     </motion.div>

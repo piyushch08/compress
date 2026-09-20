@@ -30,6 +30,7 @@ function formatSize(bytes) {
 export default function AudioTools() {
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [processedFile, setProcessedFile] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState('idle');
 
@@ -46,8 +47,10 @@ export default function AudioTools() {
 
   const resetAll = useCallback(() => {
     if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+    if (processedFile?.url) window.URL.revokeObjectURL(processedFile.url);
     setFile(null);
     setPreviewUrl(null);
+    setProcessedFile(null);
     setStatus('idle');
     setFormat('mp3');
     setAudioBitrate('128k');
@@ -60,8 +63,9 @@ export default function AudioTools() {
   useEffect(() => {
     return () => {
       if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+      if (processedFile?.url) window.URL.revokeObjectURL(processedFile.url);
     };
-  }, [previewUrl]);
+  }, [previewUrl, processedFile]);
 
   const handleFile = useCallback((selectedFile) => {
     if (!selectedFile) return;
@@ -77,6 +81,7 @@ export default function AudioTools() {
     }
     setFile(selectedFile);
     setPreviewUrl(window.URL.createObjectURL(selectedFile));
+    setProcessedFile(null);
     setStatus('idle');
     setAudioDuration(0);
   }, []);
@@ -152,19 +157,12 @@ export default function AudioTools() {
 
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = downloadUrl;
       
       const outExt = format || file.name.split('.').pop();
       const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-      a.download = `${baseName}_optimized.${outExt}`;
+      const finalName = `${baseName}_optimized.${outExt}`;
       
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(downloadUrl);
-      document.body.removeChild(a);
-
+      setProcessedFile({ url: downloadUrl, name: finalName });
       setStatus('success');
       toast.success('Audio processed successfully!');
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
@@ -330,12 +328,22 @@ export default function AudioTools() {
         </div>
       )}
 
-      {status === 'success' && (
+      {status === 'success' && processedFile && (
         <div className="success-state">
           <div className="success-icon"><Icons.Check /></div>
           <h3>Processing Complete!</h3>
-          <p>Your audio has been processed and downloaded automatically.</p>
-          <button className="btn-new" onClick={resetAll} style={{borderColor: '#8b5cf6', color: '#8b5cf6'}}>Process Another File</button>
+          <p>Review your optimized audio below.</p>
+          
+          <div style={{ margin: '1.5rem 0', display: 'flex', justifyContent: 'center' }}>
+            <audio src={processedFile.url} controls style={{ width: '100%', maxWidth: '400px' }} />
+          </div>
+
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <a href={processedFile.url} download={processedFile.name} className="btn-process" style={{ width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}>
+              <Icons.Download /> Download Audio
+            </a>
+            <button className="btn-new" onClick={resetAll} style={{ marginTop: 0, borderColor: '#8b5cf6', color: '#8b5cf6' }}>Process Another File</button>
+          </div>
         </div>
       )}
     </motion.div>

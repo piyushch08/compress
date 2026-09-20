@@ -41,6 +41,7 @@ function formatSize(bytes) {
 export default function VideoTools() {
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [processedFile, setProcessedFile] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState('idle');
 
@@ -64,8 +65,10 @@ export default function VideoTools() {
 
   const resetAll = useCallback(() => {
     if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+    if (processedFile?.url) window.URL.revokeObjectURL(processedFile.url);
     setFile(null);
     setPreviewUrl(null);
+    setProcessedFile(null);
     setStatus('idle');
     setWidth('');
     setHeight('');
@@ -82,8 +85,9 @@ export default function VideoTools() {
   useEffect(() => {
     return () => {
       if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+      if (processedFile?.url) window.URL.revokeObjectURL(processedFile.url);
     };
-  }, [previewUrl]);
+  }, [previewUrl, processedFile]);
 
   const handleFile = useCallback((selectedFile) => {
     if (!selectedFile) return;
@@ -99,6 +103,7 @@ export default function VideoTools() {
     }
     setFile(selectedFile);
     setPreviewUrl(window.URL.createObjectURL(selectedFile));
+    setProcessedFile(null);
     setStatus('idle');
     setCrop(undefined);
     setCompletedCrop(null);
@@ -188,19 +193,12 @@ export default function VideoTools() {
 
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = downloadUrl;
       
       const outExt = format || file.name.split('.').pop();
       const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-      a.download = `${baseName}_compressed.${outExt}`;
+      const finalName = `${baseName}_compressed.${outExt}`;
       
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(downloadUrl);
-      document.body.removeChild(a);
-
+      setProcessedFile({ url: downloadUrl, name: finalName });
       setStatus('success');
       toast.success('Video processed successfully!');
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
@@ -291,7 +289,7 @@ export default function VideoTools() {
                         src={previewUrl} 
                         onLoadedMetadata={onVideoLoadedMetadata}
                         controls
-                        style={{ maxHeight: '400px', maxWidth: '100%', objectFit: 'contain' }}
+                        style={{ width: '100%', height: 'auto', maxHeight: '400px' }}
                       />
                     </ReactCrop>
                     <p style={{color: 'var(--dark-muted)', fontSize: '0.85rem', textAlign: 'center'}}>
@@ -397,12 +395,22 @@ export default function VideoTools() {
         </div>
       )}
 
-      {status === 'success' && (
+      {status === 'success' && processedFile && (
         <div className="success-state">
           <div className="success-icon"><Icons.Check /></div>
           <h3>Processing Complete!</h3>
-          <p>Your video has been processed and downloaded automatically.</p>
-          <button className="btn-new" onClick={resetAll}>Process Another Video</button>
+          <p>Review your compressed video below.</p>
+          
+          <div style={{ margin: '1.5rem 0', display: 'flex', justifyContent: 'center' }}>
+            <video src={processedFile.url} controls style={{ maxWidth: '100%', maxHeight: '400px', borderRadius: 'var(--radius-md)', background: '#000' }} />
+          </div>
+
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <a href={processedFile.url} download={processedFile.name} className="btn-process" style={{ width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}>
+              <Icons.Download /> Download Video
+            </a>
+            <button className="btn-new" onClick={resetAll} style={{ marginTop: 0 }}>Process Another Video</button>
+          </div>
         </div>
       )}
     </motion.div>
