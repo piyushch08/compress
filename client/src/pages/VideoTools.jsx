@@ -39,7 +39,7 @@ function formatSize(bytes) {
 }
 
 function formatTime(seconds) {
-  if (!seconds || isNaN(seconds)) return '0:00';
+  if (seconds === undefined || seconds === null || isNaN(seconds)) return '0:00';
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${s < 10 ? '0' : ''}${s}`;
@@ -299,13 +299,17 @@ export default function VideoTools() {
               
               <div className="section-label">Visual Review & Cropping</div>
               <div className="visual-editor-container" style={{background: '#f8fafc', padding: '1rem', borderRadius: 'var(--radius-lg)', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'hidden'}}>
-                {previewUrl && (
+                {previewUrl && (() => {
+                  const currentRatio = ASPECT_RATIOS.find(r => r.label === aspectRatio);
+                  const aspectValue = currentRatio && currentRatio.w ? currentRatio.w / currentRatio.h : undefined;
+                  
+                  return (
                   <>
                     <ReactCrop 
                       crop={crop} 
                       onChange={(_, percentCrop) => setCrop(percentCrop)}
                       onComplete={(c) => setCompletedCrop(c)}
-                      aspect={aspectRatio ? (ASPECT_RATIOS.find(r => r.label === aspectRatio)?.w / ASPECT_RATIOS.find(r => r.label === aspectRatio)?.h) : undefined}
+                      aspect={aspectValue}
                       style={{ marginBottom: '1rem' }}
                     >
                       <video 
@@ -335,7 +339,8 @@ export default function VideoTools() {
                       Drag the edges to crop the video frame. Use the video controls to review content and find trim times.
                     </p>
                   </>
-                )}
+                  );
+                })()}
               </div>
 
               <div className="section-label">Trim Video</div>

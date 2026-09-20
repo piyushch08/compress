@@ -49,7 +49,7 @@ export default function ImageTools() {
   const imgRef = useRef(null);
   const [crop, setCrop] = useState();
   const [completedCrop, setCompletedCrop] = useState(null);
-  const [imageMeta, setImageMeta] = useState({ width: 0, height: 0, scaleX: 1, scaleY: 1 });
+  const [imageMeta, setImageMeta] = useState({ width: 0, height: 0, renderedWidth: 0, renderedHeight: 0, scaleX: 1, scaleY: 1 });
 
   const fileInputRef = useRef(null);
 
@@ -118,6 +118,8 @@ export default function ImageTools() {
     setImageMeta({
       width: naturalWidth,
       height: naturalHeight,
+      renderedWidth: width,
+      renderedHeight: height,
       scaleX: naturalWidth / width,
       scaleY: naturalHeight / height
     });
@@ -135,7 +137,7 @@ export default function ImageTools() {
     if (completedCrop && completedCrop.width > 0 && completedCrop.height > 0) {
       // ratio of crop area to full visual area
       const cropArea = completedCrop.width * completedCrop.height;
-      const fullArea = (imgRef.current?.width || 1) * (imgRef.current?.height || 1);
+      const fullArea = (imageMeta.renderedWidth || 1) * (imageMeta.renderedHeight || 1);
       cropFactor = Math.min(1, cropArea / fullArea);
     }
     
@@ -270,12 +272,16 @@ export default function ImageTools() {
               
               <div className="section-label">Visual Cropping</div>
               <div className="visual-editor-container" style={{background: '#f8fafc', padding: '1rem', borderRadius: 'var(--radius-lg)', marginBottom: '1.5rem', display: 'flex', justifyContent: 'center', overflow: 'hidden'}}>
-                {previewUrl && (
+                {previewUrl && (() => {
+                  const currentRatio = ASPECT_RATIOS.find(r => r.label === aspectRatio);
+                  const aspectValue = currentRatio && currentRatio.w ? currentRatio.w / currentRatio.h : undefined;
+                  
+                  return (
                   <ReactCrop 
                     crop={crop} 
                     onChange={(_, percentCrop) => setCrop(percentCrop)}
                     onComplete={(c) => setCompletedCrop(c)}
-                    aspect={aspectRatio ? (ASPECT_RATIOS.find(r => r.label === aspectRatio)?.w / ASPECT_RATIOS.find(r => r.label === aspectRatio)?.h) : undefined}
+                    aspect={aspectValue}
                   >
                       <img 
                         ref={imgRef}
@@ -285,7 +291,8 @@ export default function ImageTools() {
                         style={{ width: '100%', height: 'auto', maxHeight: '400px', display: 'block' }}
                       />
                   </ReactCrop>
-                )}
+                  );
+                })()}
               </div>
               
               {completedCrop && completedCrop.width > 0 && completedCrop.height > 0 && (
